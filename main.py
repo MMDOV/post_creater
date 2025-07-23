@@ -1,4 +1,3 @@
-from urllib.parse import uses_relative
 from aibot import OpenAi
 from wordpress import WordPress
 import pandas as pd
