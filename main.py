@@ -9,7 +9,8 @@ import sys
 
 load_dotenv()
 
-log_file = f"/path/to/logs/wp_poster_{datetime.now().strftime('%Y-%m-%d')}.log"
+log_file = f"wp_poster_{datetime.now().strftime('%Y-%m-%d')}.log"
+CSV_FILE_PATH = "machine.csv"
 
 logging.basicConfig(
     filename=log_file,
@@ -25,8 +26,6 @@ logging.getLogger().addHandler(console)
 
 
 def main():
-    FILE_PATH = "machinee.csv"
-
     api_key = os.getenv("API_KEY")
     username = os.getenv("USERNAME")
     password = os.getenv("PASSWORD")
@@ -41,22 +40,24 @@ def main():
         )
 
     try:
-        file = pd.read_csv(FILE_PATH, nrows=1)
+        file = pd.read_csv(CSV_FILE_PATH, nrows=1)
         question = str(file["text"][0])
 
         client = OpenAi(api_key=api_key)
 
         response = client.get_text_response(prompt=question)
         image_path = client.get_image_response(prompt=question)
+        with open("file.html", "w", encoding="utf-8") as f:
+            f.write(response)
 
         wordpress = WordPress(username=username, password=password, site_url=site_url)
         image_id, image_url = wordpress.upload_image(image_path=image_path)
         wordpress.create_post(
             title=question, content=response, media_id=image_id, image_url=image_url
         )
-        df = pd.read_csv(FILE_PATH, skiprows=1)
-
-        df.to_csv(FILE_PATH, index=False)
+        df = pd.read_csv(CSV_FILE_PATH)
+        df = df.drop(index=0)
+        df.to_csv(CSV_FILE_PATH, index=False)
     except KeyError:
         logging.error("File out of words", exc_info=True)
     except FileNotFoundError:
