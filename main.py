@@ -45,16 +45,16 @@ def main():
 
         client = OpenAi(api_key=api_key)
 
-        response = client.get_text_response(prompt=question)
-        image_path = client.get_image_response(prompt=question)
+        response = client.get_text_response(keyword=question)
+        # image_path = client.get_image_response(prompt=question)
         with open("file.html", "w", encoding="utf-8") as f:
             f.write(response)
 
-        wordpress = WordPress(username=username, password=password, site_url=site_url)
-        image_id, image_url = wordpress.upload_image(image_path=image_path)
-        wordpress.create_post(
-            title=question, content=response, media_id=image_id, image_url=image_url
-        )
+        # wordpress = WordPress(username=username, password=password, site_url=site_url)
+        # image_id, image_url = wordpress.upload_image(image_path=image_path)
+        # wordpress.create_post(
+        #    title=question, content=response, media_id=image_id, image_url=image_url
+        # )
         df = pd.read_csv(CSV_FILE_PATH)
         df = df.drop(index=0)
         df.to_csv(CSV_FILE_PATH, index=False)
