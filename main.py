@@ -1,3 +1,5 @@
+import asyncio
+import requests
 from aibot import OpenAi
 from wordpress import WordPress
 import pandas as pd
@@ -25,7 +27,7 @@ console.setFormatter(formatter)
 logging.getLogger().addHandler(console)
 
 
-def main():
+async def main():
     api_key = os.getenv("API_KEY")
     username = os.getenv("USERNAME")
     password = os.getenv("PASSWORD")
@@ -43,16 +45,35 @@ def main():
         file = pd.read_csv(CSV_FILE_PATH, nrows=1)
         question = str(file["text"][0])
 
-        client = OpenAi(api_key=api_key)
+        # wordpress = WordPress(username=username, password=password, site_url=site_url)
+        client = OpenAi(api_key=api_key, keyword=question)
+        get_img_task = asyncio.create_task(client.get_valid_farsi_images())
+        print("image task started")
+        get_text_task = asyncio.create_task(client.get_text_response())
+        print("text task started")
+        print("awaiting img task")
+        img_urls = await get_img_task
+        i = 0
 
-        response = client.get_text_response(keyword=question)
-        # image_path = client.get_image_response(prompt=question)
+        # TODO: modify the images using Pillow
+        print("saving images")
+        for url in img_urls:
+            i += 1
+            img_type = url.split(".")[-1]
+            img_data = requests.get(url).content
+            with open(f"{client.keyword}{i}.{img_type}", "wb") as handler:
+                handler.write(img_data)
+            # image_id, image_url = await wordpress.upload_image(
+            #    image_path=f"image{i}.{img_type}"
+            # )
+
+        print("awaiting text task")
+        response = await get_text_task
         with open("file.html", "w", encoding="utf-8") as f:
             f.write(response)
 
-        # wordpress = WordPress(username=username, password=password, site_url=site_url)
-        # image_id, image_url = wordpress.upload_image(image_path=image_path)
-        # wordpress.create_post(
+        # TODO: need to still edit this wordpress part after getting access to it
+        # await wordpress.create_post(
         #    title=question, content=response, media_id=image_id, image_url=image_url
         # )
         df = pd.read_csv(CSV_FILE_PATH)
@@ -67,4 +88,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
