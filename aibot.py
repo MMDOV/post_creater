@@ -107,6 +107,35 @@ class OpenAi:
 
         return urls
 
+    async def google_image_search(self, api_key, cse_id, num_results=5):
+        search_url = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            "q": self.keyword,
+            "cx": cse_id,
+            "key": api_key,
+            "searchType": "image",
+            "num": num_results,
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(search_url, params=params) as response:
+                response.raise_for_status()
+                results = await response.json()
+
+        images = []
+        if "items" in results:
+            for item in results["items"]:
+                images.append(
+                    {
+                        "title": item.get("title"),
+                        "link": item.get("link"),
+                        "thumbnail": item.get("image", {}).get("thumbnailLink"),
+                        "context_link": item.get("image", {}).get("contextLink"),
+                    }
+                )
+
+        return images
+
     async def get_image_response(self, prompt: str) -> str:
         image_prompt = f"""
         Generate an image that describes the text below best:\n\n
