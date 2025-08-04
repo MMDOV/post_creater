@@ -1,5 +1,6 @@
 import asyncio
-import requests
+import aiohttp
+import aiofiles
 from aibot import OpenAi
 from wordpress import WordPress
 import pandas as pd
@@ -46,7 +47,7 @@ async def main():
         question = str(file["text"][0])
 
         # wordpress = WordPress(username=username, password=password, site_url=site_url)
-        client = OpenAi(api_key=api_key, keyword=question)
+        client = OpenAi(api_key=api_key, keyword=question, categories=[], tags=[])
         get_img_task = asyncio.create_task(client.get_valid_farsi_images())
         print("image task started")
         get_text_task = asyncio.create_task(client.get_text_response())
@@ -57,20 +58,32 @@ async def main():
 
         # TODO: modify the images using Pillow
         print("saving images")
-        for url in img_urls:
-            i += 1
-            img_type = url.split(".")[-1]
-            img_data = requests.get(url).content
-            with open(f"{client.keyword}{i}.{img_type}", "wb") as handler:
-                handler.write(img_data)
+
+        async def download_image(session, url: str, filename: str):
+            async with session.get(url) as response:
+                if response.status == 200:
+                    img_data = await response.read()
+                    async with aiofiles.open(filename, "wb") as f:
+                        await f.write(img_data)
+
+        tasks = []
+        async with aiohttp.ClientSession() as session:
+            for i, url in enumerate(img_urls, start=1):
+                img_type = url.split(".")[-1]
+                filename = f"{client.keyword}{i}.{img_type}"
+                task = asyncio.create_task(download_image(session, url, filename))
+                tasks.append(task)
+            await asyncio.gather(*tasks)
+
             # image_id, image_url = await wordpress.upload_image(
             #    image_path=f"image{i}.{img_type}"
             # )
 
         print("awaiting text task")
-        response = await get_text_task
+        json_output, html_output = await get_text_task
+        print(json_output)
         with open("file.html", "w", encoding="utf-8") as f:
-            f.write(response)
+            f.write(html_output)
 
         # TODO: need to still edit this wordpress part after getting access to it
         # await wordpress.create_post(

@@ -1,4 +1,6 @@
 from openai import AsyncOpenAI
+import re
+import json
 from ddgs import DDGS
 import aiohttp
 import asyncio
@@ -6,11 +8,15 @@ import base64
 
 
 class OpenAi:
-    def __init__(self, api_key: str, keyword: str) -> None:
+    def __init__(
+        self, api_key: str, keyword: str, categories: list[str], tags: list[str]
+    ) -> None:
         self.client = AsyncOpenAI(api_key=api_key)
         self.keyword = keyword
+        self.categories = categories
+        self.tags = tags
 
-    async def get_text_response(self) -> str:
+    async def get_text_response(self) -> tuple[dict, str]:
         response = await self.client.responses.create(
             model="gpt-4.1",
             tools=[{"type": "web_search_preview"}],
@@ -35,6 +41,16 @@ class OpenAi:
                         Suggest 2 internal links:
                         Link 1: Use anchor text [Anchor Text 1].
                         Link 2: Use anchor text [Anchor Text 2].
+                        After the article, return a JSON block like this (outside of the HTML), selecting the most relevant categories and tags from the lists below based on the content you generated:
+
+                        Categories: {self.categories}
+                        Tags: {self.tags}
+
+                        Output format (outside the HTML):
+                        {{
+                          "categories": ["category1", "category2"],
+                          "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+                        }}
 
                         Avoid keyword stuffing and maintain a conversational tone. Output format:
                         Meta Description
@@ -46,7 +62,8 @@ class OpenAi:
                 },
             ],
         )
-        return response.output_text
+        json_output, html_output = await separate_json(response.output_text)
+        return json_output, html_output
 
     async def get_valid_farsi_images(self, max_results=10):
         query = f"{self.keyword} عکس site:.ir"
@@ -108,3 +125,18 @@ class OpenAi:
                 f.write(image_bytes)
 
         return f"{prompt}.png"
+
+
+async def separate_json(text: str) -> tuple[dict, str]:
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        json_text = match.group()
+        try:
+            json_output = json.loads(json_text)
+        except json.JSONDecodeError:
+            json_output = {"categories": [], "tags": []}
+        html_output = text[: match.start()].strip()
+    else:
+        json_output = {"categories": [], "tags": []}
+        html_output = text.strip()
+    return json_output, html_output
