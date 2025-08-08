@@ -48,12 +48,13 @@ async def main():
 
         # wordpress = WordPress(username=username, password=password, site_url=site_url)
         client = OpenAi(api_key=api_key, keyword=question, categories=[], tags=[])
-        get_img_task = asyncio.create_task(client.get_valid_farsi_images())
+        # get_img_task = asyncio.create_task(client.get_valid_farsi_images())
         print("image task started")
-        get_text_task = asyncio.create_task(client.get_text_response())
-        print("text task started")
+        # get_text_task = asyncio.create_task(client.get_text_response())
+        get_image_task = asyncio.create_task(client.get_image_links())
+        print("get image task started")
         print("awaiting img task")
-        img_urls = await get_img_task
+        # img_urls = await get_img_task
         i = 0
 
         # TODO: modify the images using Pillow
@@ -67,23 +68,25 @@ async def main():
                         await f.write(img_data)
 
         tasks = []
-        async with aiohttp.ClientSession() as session:
-            for i, url in enumerate(img_urls, start=1):
-                img_type = url.split(".")[-1]
-                filename = f"{client.keyword}{i}.{img_type}"
-                task = asyncio.create_task(download_image(session, url, filename))
-                tasks.append(task)
-            await asyncio.gather(*tasks)
+        #        async with aiohttp.ClientSession() as session:
+        #            for i, url in enumerate(img_urls, start=1):
+        #                img_type = url.split(".")[-1]
+        #                filename = f"{client.keyword}{i}.{img_type}"
+        #                task = asyncio.create_task(download_image(session, url, filename))
+        #                tasks.append(task)
+        #            await asyncio.gather(*tasks)
 
-            # image_id, image_url = await wordpress.upload_image(
-            #    image_path=f"image{i}.{img_type}"
-            # )
+        # image_id, image_url = await wordpress.upload_image(
+        #    image_path=f"image{i}.{img_type}"
+        # )
 
         print("awaiting text task")
-        json_output, html_output = await get_text_task
-        print(json_output)
-        with open("file.html", "w", encoding="utf-8") as f:
-            f.write(html_output)
+        # json_output, html_output = await get_text_task
+        links = await get_image_task
+        print(links)
+        # print(json_output)
+        # with open("file.html", "w", encoding="utf-8") as f:
+        #    f.write(html_output)
 
         # TODO: need to still edit this wordpress part after getting access to it
         # await wordpress.create_post(

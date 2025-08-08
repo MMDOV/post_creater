@@ -16,9 +16,30 @@ class OpenAi:
         self.categories = categories
         self.tags = tags
 
+    async def get_image_links(self):
+        print("sending second request")
+        image_response = await self.client.responses.create(
+            model="gpt-5",
+            tools=[{"type": "web_search_preview"}],
+            input=[
+                {
+                    "role": "user",
+                    "content": f"Find 10 high-quality, royalty-free images relevant to '{self.keyword}' "
+                    "and return only direct image URLs in a plain list, no HTML, no markdown.",
+                }
+            ],
+        )
+
+        return image_response
+
     async def get_text_response(self) -> tuple[dict, str]:
-        response = await self.client.responses.create(
-            model="gpt-4.1",
+        print("trying to get answer from api")
+
+        # 1️⃣ First request — Generate the article
+        article_response = await self.client.responses.create(
+            model="gpt-5",
+            reasoning={"effort": "medium"},  # More thought for better structure
+            text={"verbosity": "high"},
             tools=[{"type": "web_search_preview"}],
             input=[
                 {
@@ -27,21 +48,26 @@ class OpenAi:
                         "Return the result as clean HTML, but do NOT include <html>, <head>, or <body> tags. "
                         "Wrap the entire content in a <div> with lang='fa' and dir='rtl'. "
                         "Style the content for good readability with appropriate spacing and formatting for Persian. "
-                        "Verify your info and make sure it is up to date and correct "
+                        "Verify your info and make sure it is up to date and correct. "
                         "Only return valid HTML. No code blocks or markdown formatting."
                     ),
                 },
                 {
                     "role": "user",
                     "content": f"""
-                        Create a 1500-word SEO-optimized article focused on Primary Keyword “{self.keyword}”. Structure the article with 12 headings that integrate the primary keyword naturally in the first 100 words, 2–3 subheadings, and the conclusion. Include a meta description (under 160 characters) containing Primary Keyword. Use simple language, short paragraphs (≤3 lines), and ensure readability (Flesch-Kincaid Grade 8–9).  
+                        Create a 1500-word SEO-optimized article focused on Primary Keyword “{self.keyword}”.
+                        Structure the article with 12 headings that integrate the primary keyword naturally in the first 100 words,
+                        2–3 subheadings, and the conclusion. Include a meta description (under 160 characters) containing Primary Keyword.
+                        Use simple language, short paragraphs (≤3 lines), and ensure readability (Flesch-Kincaid Grade 8–9).
 
                         Add 3 FAQs addressing common user queries about the Topic, formatted as: Q: ... A:...
-                          
+                        
                         Suggest 2 internal links:
                         Link 1: Use anchor text [Anchor Text 1].
                         Link 2: Use anchor text [Anchor Text 2].
-                        After the article, return a JSON block like this (outside of the HTML), selecting the most relevant categories and tags from the lists below based on the content you generated:
+
+                        After the article, return a JSON block like this (outside of the HTML), selecting the most relevant
+                        categories and tags from the lists below based on the content you generated:
 
                         Categories: {self.categories}
                         Tags: {self.tags}
@@ -52,17 +78,20 @@ class OpenAi:
                           "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
                         }}
 
-                        Avoid keyword stuffing and maintain a conversational tone. Output format:
+                        Avoid keyword stuffing and maintain a conversational tone.
+                        Output format:
                         Meta Description
                         Introduction (100 words ending with 'In this guide, we’ll cover...')
                         12 headings with content
                         FAQs
-                        Internal linking suggestions with placement notes."
+                        Internal linking suggestions with placement notes
                     """,
                 },
             ],
         )
-        json_output, html_output = await separate_json(response.output_text)
+
+        json_output, html_output = await separate_json(article_response.output_text)
+
         return json_output, html_output
 
     async def get_valid_farsi_images(self, max_results=10):
@@ -157,6 +186,7 @@ class OpenAi:
 
 
 async def separate_json(text: str) -> tuple[dict, str]:
+    print("trying to seperate")
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
         json_text = match.group()
