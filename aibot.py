@@ -1,23 +1,29 @@
 from openai import AsyncOpenAI
 import re
 import json
-from ddgs import DDGS
 import aiohttp
-import asyncio
-import base64
 
 
 class OpenAi:
     def __init__(
-        self, api_key: str, keyword: str, categories: list[str], tags: list[str]
+        self,
+        openai_api_key: str,
+        google_api_key: str,
+        google_cse_id: str,
+        keyword: str,
+        categories: list[str],
+        tags: list[str],
+        related_articles: list[dict],
     ) -> None:
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(api_key=openai_api_key)
+        self.google_api_key = google_api_key
+        self.google_cse_id = google_cse_id
         self.keyword = keyword
         self.categories = categories
         self.tags = tags
+        self.related_articles = related_articles
 
     async def get_image_links(self):
-        print("sending second request")
         image_response = await self.client.responses.create(
             model="gpt-5",
             tools=[{"type": "web_search_preview"}],
@@ -33,12 +39,10 @@ class OpenAi:
         return image_response
 
     async def get_text_response(self) -> tuple[dict, str]:
-        print("trying to get answer from api")
-
-        # 1️⃣ First request — Generate the article
+        # TODO: still need to figure out how are we adding the pillar page
         article_response = await self.client.responses.create(
             model="gpt-5",
-            reasoning={"effort": "medium"},  # More thought for better structure
+            reasoning={"effort": "medium"},
             text={"verbosity": "high"},
             tools=[{"type": "web_search_preview"}],
             input=[
@@ -61,12 +65,21 @@ class OpenAi:
                         Use simple language, short paragraphs (≤3 lines), and ensure readability (Flesch-Kincaid Grade 8–9).
 
                         Add 3 FAQs addressing common user queries about the Topic, formatted as: Q: ... A:...
-                        
-                        Suggest 2 internal links:
-                        Link 1: Use anchor text [Anchor Text 1].
-                        Link 2: Use anchor text [Anchor Text 2].
 
-                        After the article, return a JSON block like this (outside of the HTML), selecting the most relevant
+                        Here is a list of related internal blog articles. Insert hyperlinks to them wherever relevant 
+                        in the article, using natural descriptive anchor text from their titles or summaries. 
+                        You may link multiple times to the same article if it’s relevant in different sections, 
+                        but avoid keyword stuffing. Do not make up links that are not in this list.
+
+                        Related Articles:
+                        {self.related_articles}
+
+                        Whenever you mention something that could be illustrated visually, insert an HTML placeholder tag like:
+                        <placeholder-img>short descriptive sentence of the image to search for</placeholder-img>
+                        The description should be specific enough to search for relevant images on Google.
+                        Do not insert actual <img> tags or image URLs, only this placeholder.
+
+                        After the article, return a JSON block (outside of the HTML) selecting the most relevant
                         categories and tags from the lists below based on the content you generated:
 
                         Categories: {self.categories}
@@ -78,70 +91,30 @@ class OpenAi:
                           "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
                         }}
 
-                        Avoid keyword stuffing and maintain a conversational tone.
                         Output format:
                         Meta Description
                         Introduction (100 words ending with 'In this guide, we’ll cover...')
                         12 headings with content
                         FAQs
-                        Internal linking suggestions with placement notes
+                        Internal links placed naturally in the HTML
+                        Image placeholders inserted where relevant
                     """,
                 },
             ],
         )
+        json_output, self.html_output = await separate_json(
+            article_response.output_text
+        )
+        await self.replace_image_placeholders()
 
-        json_output, html_output = await separate_json(article_response.output_text)
+        return json_output, self.html_output
 
-        return json_output, html_output
-
-    async def get_valid_farsi_images(self, max_results=10):
-        query = f"{self.keyword} عکس site:.ir"
-
-        def run_search():
-            with DDGS() as ddgs:
-                return list(
-                    ddgs.images(
-                        query,
-                        max_results=max_results,
-                        region="wt-wt",
-                        size="Medium",
-                    )
-                )
-
-        results = await asyncio.to_thread(run_search)
-
-        async def is_valid_image_url(session, url):
-            try:
-                async with session.head(
-                    url, timeout=aiohttp.ClientTimeout(total=5)
-                ) as resp:
-                    if resp.status == 200:
-                        return url
-            except Exception:
-                pass
-            return None
-
-        urls = []
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            for result in results:
-                url = result.get("image")
-                if url and url.endswith((".jpg", ".png")):
-                    tasks.append(is_valid_image_url(session, url))
-                if len(tasks) >= max_results * 2:
-                    break
-
-            checked = await asyncio.gather(*tasks)
-            urls = [u for u in checked if u][:3]
-
-        return urls
-
-    async def google_image_search(self, api_key, cse_id, num_results=5):
+    async def google_image_search(self, query, num_results=5) -> list[dict]:
         search_url = "https://www.googleapis.com/customsearch/v1"
         params = {
-            "q": self.keyword,
-            "cx": cse_id,
-            "key": api_key,
+            "q": query,
+            "cx": self.google_cse_id,
+            "key": self.google_api_key,
             "searchType": "image",
             "num": num_results,
         }
@@ -165,24 +138,20 @@ class OpenAi:
 
         return images
 
-    async def get_image_response(self, prompt: str) -> str:
-        image_prompt = f"""
-        Generate an image that describes the text below best:\n\n
-        {prompt}
-        """
-
-        result = await self.client.images.generate(
-            model="dall-e-3", prompt=image_prompt, response_format="b64_json"
+    # FIX: we are NOT doing this here the images need to be downloaded first
+    # and the links need to be internal but it is a good placeholder
+    async def replace_image_placeholders(self):
+        queries = re.findall(
+            r"<placeholder-img>(.*?)</placeholder-img>", self.html_output
         )
-
-        if result:
-            image_base64 = result.data[0].b64_json
-            image_bytes = base64.b64decode(image_base64)
-
-            with open(f"{prompt.replace(' ', '_')}.png", "wb") as f:
-                f.write(image_bytes)
-
-        return f"{prompt}.png"
+        placeholders = re.findall(
+            r"<placeholder-img>.*?</placeholder-img>", self.html_output
+        )
+        for query, placeholder in zip(queries, placeholders):
+            images = await self.google_image_search(query, num_results=1)
+            image = images[0]
+            new_tag = f'<img src="{image["link"]}" alt="{query}">'
+            self.html_output = self.html_output.replace(placeholder, new_tag)
 
 
 async def separate_json(text: str) -> tuple[dict, str]:

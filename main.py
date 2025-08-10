@@ -28,6 +28,13 @@ console.setFormatter(formatter)
 logging.getLogger().addHandler(console)
 
 
+# TODO: figure out a way to handle the filters meaning how to determine them automatically or
+# if they need to be added manually how can we make the procceses as easy as possible
+# TODO: all the info that we need is probably taken in a yaml or env file
+# TODO: should be a layer above both of te bots that handles everything
+# so that we could get a site, its info, all the categories, tags,
+# and pillar words (which are our keywords)
+# and then call the keyword bot on each category and so on
 async def main():
     api_key = os.getenv("API_KEY")
     username = os.getenv("USERNAME")
@@ -47,7 +54,9 @@ async def main():
         question = str(file["text"][0])
 
         # wordpress = WordPress(username=username, password=password, site_url=site_url)
-        client = OpenAi(api_key=api_key, keyword=question, categories=[], tags=[])
+        client = OpenAi(
+            openai_api_key=api_key, keyword=question, categories=[], tags=[]
+        )
         # get_img_task = asyncio.create_task(client.get_valid_farsi_images())
         print("image task started")
         # get_text_task = asyncio.create_task(client.get_text_response())
