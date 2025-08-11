@@ -1,4 +1,5 @@
 import asyncio
+import re
 import aiohttp
 import aiofiles
 from aibot import OpenAi
@@ -53,51 +54,47 @@ async def main():
         file = pd.read_csv(CSV_FILE_PATH, nrows=1)
         question = str(file["text"][0])
 
-        # wordpress = WordPress(username=username, password=password, site_url=site_url)
+        wordpress = WordPress(username=username, password=password, site_url=site_url)
         client = OpenAi(
             openai_api_key=api_key, keyword=question, categories=[], tags=[]
         )
-        # get_img_task = asyncio.create_task(client.get_valid_farsi_images())
-        print("image task started")
-        # get_text_task = asyncio.create_task(client.get_text_response())
-        get_image_task = asyncio.create_task(client.get_image_links())
-        print("get image task started")
-        print("awaiting img task")
+
+        # TODO: handle json output which is tags / categories
+        # TODO: test the images
+        json_output, html_output = await client.get_text_response()
+        # get_image_task = asyncio.create_task(client.get_image_links())
         # img_urls = await get_img_task
-        i = 0
 
+        # there are placeholders
+        # we get every placeholder and serach for images
+        # we give ai the images to rank based on the query
+        # pick the best image and upload it
+        # get the link and replace the image placeholder
+        queries = re.findall(r"<placeholder-img>(.*?)</placeholder-img>", html_output)
+        placeholders = re.findall(
+            r"<placeholder-img>.*?</placeholder-img>", html_output
+        )
+        for query, placeholder in zip(queries, placeholders):
+            images = await client.google_image_search(query)
+            best_image_url = await client.pick_best_image(images, query)
+
+            async with aiohttp.ClientSession() as session:
+                img_type = best_image_url.split(".")[-1]
+                filename = f"{query.replace(' ', '_')}.{img_type}"
+                await download_image(session, best_image_url, filename)
+            _, image_url = await wordpress.upload_image(
+                image_path=f"{query.replace(' ', '_')}.{img_type}"
+            )
+            new_tag = f'<img src="{image_url}" alt="{query}">'
+            html_output = html_output.replace(placeholder, new_tag)
         # TODO: modify the images using Pillow
-        print("saving images")
 
-        async def download_image(session, url: str, filename: str):
-            async with session.get(url) as response:
-                if response.status == 200:
-                    img_data = await response.read()
-                    async with aiofiles.open(filename, "wb") as f:
-                        await f.write(img_data)
-
-        tasks = []
-        #        async with aiohttp.ClientSession() as session:
-        #            for i, url in enumerate(img_urls, start=1):
-        #                img_type = url.split(".")[-1]
-        #                filename = f"{client.keyword}{i}.{img_type}"
-        #                task = asyncio.create_task(download_image(session, url, filename))
-        #                tasks.append(task)
-        #            await asyncio.gather(*tasks)
-
-        # image_id, image_url = await wordpress.upload_image(
-        #    image_path=f"image{i}.{img_type}"
-        # )
-
-        print("awaiting text task")
-        # json_output, html_output = await get_text_task
-        links = await get_image_task
-        print(links)
         # print(json_output)
         # with open("file.html", "w", encoding="utf-8") as f:
         #    f.write(html_output)
 
         # TODO: need to still edit this wordpress part after getting access to it
+
         # await wordpress.create_post(
         #    title=question, content=response, media_id=image_id, image_url=image_url
         # )
@@ -110,6 +107,14 @@ async def main():
         logging.error("there is no such file", exc_info=True)
     except Exception as e:
         logging.error(e, exc_info=True)
+
+
+async def download_image(session, url: str, filename: str):
+    async with session.get(url) as response:
+        if response.status == 200:
+            img_data = await response.read()
+            async with aiofiles.open(filename, "wb") as f:
+                await f.write(img_data)
 
 
 if __name__ == "__main__":

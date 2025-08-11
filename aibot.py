@@ -102,12 +102,9 @@ class OpenAi:
                 },
             ],
         )
-        json_output, self.html_output = await separate_json(
-            article_response.output_text
-        )
-        await self.replace_image_placeholders()
+        json_output, html_output = await separate_json(article_response.output_text)
 
-        return json_output, self.html_output
+        return json_output, html_output
 
     async def google_image_search(self, query, num_results=5) -> list[dict]:
         search_url = "https://www.googleapis.com/customsearch/v1"
@@ -138,20 +135,33 @@ class OpenAi:
 
         return images
 
-    # FIX: we are NOT doing this here the images need to be downloaded first
-    # and the links need to be internal but it is a good placeholder
-    async def replace_image_placeholders(self):
-        queries = re.findall(
-            r"<placeholder-img>(.*?)</placeholder-img>", self.html_output
+    async def pick_best_image(self, images: list[dict], query: str) -> str:
+        prompt_text = (
+            f"Rank the following images from best to worst in describing the word '{query}'. "
+            "Return your answer ONLY as a JSON object with keys 'best' and 'ranking', "
+            "where 'best' is the URL of the best image and 'ranking' is a list of all URLs ordered."
         )
-        placeholders = re.findall(
-            r"<placeholder-img>.*?</placeholder-img>", self.html_output
+        best_img_response = await self.client.responses.create(
+            model="gpt-5",
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": prompt_text,
+                        },
+                        *[
+                            {"type": "input_image", "image_url": str(image["url"])}
+                            for image in images
+                        ],
+                    ],
+                }
+            ],
         )
-        for query, placeholder in zip(queries, placeholders):
-            images = await self.google_image_search(query, num_results=1)
-            image = images[0]
-            new_tag = f'<img src="{image["link"]}" alt="{query}">'
-            self.html_output = self.html_output.replace(placeholder, new_tag)
+        result = json.loads(best_img_response.output_text)
+        best_url = result.get("best")
+        return best_url
 
 
 async def separate_json(text: str) -> tuple[dict, str]:
