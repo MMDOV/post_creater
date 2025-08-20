@@ -37,31 +37,50 @@ logging.getLogger().addHandler(console)
 # and pillar words (which are our keywords)
 # and then call the keyword bot on each category and so on
 async def main():
-    api_key = os.getenv("API_KEY")
-    username = os.getenv("USERNAME")
-    password = os.getenv("PASSWORD")
+    api_key = os.getenv("OPENAI_API_KEY")
+    wp_api_user = os.getenv("WP_API_USER")
+    wp_api_pass = os.getenv("WP_API_PASS")
     site_url = os.getenv("SITE_URL")
-    if not api_key or not username or not password or not site_url:
+    google_api = os.getenv("GOOGLE_API")
+    google_cse = os.getenv("GOOGLE_CSE")
+    if (
+        not api_key
+        or not wp_api_user
+        or not wp_api_pass
+        or not site_url
+        or not google_api
+        or not google_cse
+    ):
         logging.error(
-            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL",
+            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE",
             exc_info=True,
         )
         raise RuntimeError(
-            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL"
+            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE"
         )
 
     try:
         file = pd.read_csv(CSV_FILE_PATH, nrows=1)
         question = str(file["text"][0])
 
-        wordpress = WordPress(username=username, password=password, site_url=site_url)
+        wordpress = WordPress(
+            username=wp_api_user, password=wp_api_pass, site_url=site_url
+        )
         client = OpenAi(
-            openai_api_key=api_key, keyword=question, categories=[], tags=[]
+            openai_api_key=api_key,
+            google_api_key=google_api,
+            google_cse_id=google_cse,
+            keyword=question,
+            categories=[],
+            tags=[],
+            related_articles=[],
         )
 
         # TODO: handle json output which is tags / categories
         # TODO: test the images
-        json_output, html_output = await client.get_text_response()
+        # json_output, html_output = await client.get_text_response()
+        with open("file.html", "r", encoding="utf-8") as file:
+            html_output = file.read()
         # get_image_task = asyncio.create_task(client.get_image_links())
         # img_urls = await get_img_task
 
@@ -74,30 +93,45 @@ async def main():
         placeholders = re.findall(
             r"<placeholder-img>.*?</placeholder-img>", html_output
         )
-        for query, placeholder in zip(queries, placeholders):
-            images = await client.google_image_search(query)
-            best_image_url = await client.pick_best_image(images, query)
 
-            async with aiohttp.ClientSession() as session:
-                img_type = best_image_url.split(".")[-1]
-                filename = f"{query.replace(' ', '_')}.{img_type}"
-                await download_image(session, best_image_url, filename)
-            _, image_url = await wordpress.upload_image(
-                image_path=f"{query.replace(' ', '_')}.{img_type}"
-            )
-            new_tag = f'<img src="{image_url}" alt="{query}">'
-            html_output = html_output.replace(placeholder, new_tag)
-        # TODO: modify the images using Pillow
+        if queries:
+            for query, placeholder in zip(queries, placeholders):
+                async with aiohttp.ClientSession() as session:
+                    images = await client.google_image_search(query)
+                    links = [str(image["link"]) for image in images]
+                    files = [
+                        await download_image(
+                            session, link, f"{str(i)}.{link.split('.')[-1]}"
+                        )
+                        for i, link in enumerate(links)
+                    ]
+                    if len(files) > 1:
+                        best_image_url_idx = await client.pick_best_image(files, query)
+                        best_image = files[int(best_image_url_idx) - 1]
+                    elif len(files) == 1:
+                        best_image = files[0]
+                    else:
+                        html_output = html_output.replace(placeholder, "")
+                        continue
+                    img_type = best_image.split(".")[-1]
+                    for file in files:
+                        if file != best_image:
+                            os.remove(file)
+                    os.rename(best_image, f"{query.replace(' ', '_')}.{img_type}")
+                    print(best_image)
+                image_url = await wordpress.upload_image(
+                    image_path=f"{query.replace(' ', '_')}.{img_type}"
+                )
+                new_tag = f'<img src="{image_url}" alt="{query}">'
+                html_output = html_output.replace(placeholder, new_tag)
+            # TODO: modify the images using Pillow
 
-        # print(json_output)
-        # with open("file.html", "w", encoding="utf-8") as f:
-        #    f.write(html_output)
+            with open("file1.html", "w", encoding="utf-8") as file:
+                file.write(html_output)
 
         # TODO: need to still edit this wordpress part after getting access to it
 
-        # await wordpress.create_post(
-        #    title=question, content=response, media_id=image_id, image_url=image_url
-        # )
+        await wordpress.create_post(title=question, content=html_output)
         df = pd.read_csv(CSV_FILE_PATH)
         df = df.drop(index=0)
         df.to_csv(CSV_FILE_PATH, index=False)
@@ -110,11 +144,14 @@ async def main():
 
 
 async def download_image(session, url: str, filename: str):
+    print(f"downloading image {filename}")
     async with session.get(url) as response:
         if response.status == 200:
             img_data = await response.read()
             async with aiofiles.open(filename, "wb") as f:
                 await f.write(img_data)
+
+    return filename
 
 
 if __name__ == "__main__":

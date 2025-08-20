@@ -9,6 +9,7 @@ class WordPress:
         self.site_url = site_url
 
     async def upload_image(self, image_path: str):
+        print(f"uploading image {image_path}")
         image_filename = os.path.basename(image_path)
         url = f"{self.site_url}/wp-json/wp/v2/media"
         headers = {
@@ -26,16 +27,13 @@ class WordPress:
                 if resp.status != 201:
                     raise Exception(f"Failed to upload image: {resp.status}")
                 result = await resp.json()
-                return result["id"], result["source_url"]
+                return result["source_url"]
 
-    async def create_post(
-        self, title: str, content: str, media_id: str, image_url: str
-    ):
+    async def create_post(self, title: str, content: str):
         post_data = {
             "title": title,
-            "content": f'<img src="{image_url}" alt="{title}" /><p>{content}</p>',
-            "status": "publish",
-            "featured_media": media_id,
+            "content": content,
+            "status": "draft",
         }
 
         url = f"{self.site_url}/wp-json/wp/v2/posts"
@@ -44,6 +42,8 @@ class WordPress:
         ) as session:
             async with session.post(url, json=post_data) as resp:
                 if resp.status != 201:
-                    raise Exception(f"Failed to create post: {resp.status}")
+                    raise Exception(
+                        f"Failed to create post: {resp.status}, {await resp.text()}"
+                    )
                 result = await resp.json()
                 print("Post created:", result["link"])

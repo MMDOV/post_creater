@@ -1,4 +1,6 @@
 from openai import AsyncOpenAI
+from io import BytesIO
+import aiofiles
 import re
 import json
 import aiohttp
@@ -107,13 +109,14 @@ class OpenAi:
         return json_output, html_output
 
     async def google_image_search(self, query, num_results=5) -> list[dict]:
+        print("searching google")
         search_url = "https://www.googleapis.com/customsearch/v1"
         params = {
             "q": query,
             "cx": self.google_cse_id,
             "key": self.google_api_key,
             "searchType": "image",
-            "num": num_results,
+            "num": min(num_results * 2, 10),
         }
 
         async with aiohttp.ClientSession() as session:
@@ -122,25 +125,36 @@ class OpenAi:
                 results = await response.json()
 
         images = []
-        if "items" in results:
-            for item in results["items"]:
-                images.append(
-                    {
-                        "title": item.get("title"),
-                        "link": item.get("link"),
-                        "thumbnail": item.get("image", {}).get("thumbnailLink"),
-                        "context_link": item.get("image", {}).get("contextLink"),
-                    }
-                )
+        async with aiohttp.ClientSession() as session:
+            for item in results.get("items", []):
+                link = item.get("link", "")
+                if await is_valid_image(session, link) and str(link).endswith(
+                    (".jpg", ".jpeg", ".png", ".webp")
+                ):
+                    images.append(
+                        {
+                            "title": item.get("title"),
+                            "link": link,
+                            "thumbnail": item.get("image", {}).get("thumbnailLink"),
+                            "context_link": item.get("image", {}).get("contextLink"),
+                        }
+                    )
+                if len(images) >= num_results:
+                    break
+        print(json.dumps(images, indent=4, sort_keys=True))
 
         return images
 
-    async def pick_best_image(self, images: list[dict], query: str) -> str:
+    async def pick_best_image(self, file_paths: list[str], query: str) -> str:
+        files = [await self.create_file(image) for image in file_paths]
         prompt_text = (
             f"Rank the following images from best to worst in describing the word '{query}'. "
             "Return your answer ONLY as a JSON object with keys 'best' and 'ranking', "
-            "where 'best' is the URL of the best image and 'ranking' is a list of all URLs ordered."
+            "where 'best' is the number of the best image and 'ranking' is a list of all URLs ordered "
+            "only send back numbers no other follow up words just the number"
         )
+        print("picking best image")
+        print(file_paths)
         best_img_response = await self.client.responses.create(
             model="gpt-5",
             input=[
@@ -152,16 +166,30 @@ class OpenAi:
                             "text": prompt_text,
                         },
                         *[
-                            {"type": "input_image", "image_url": str(image["url"])}
-                            for image in images
+                            {
+                                "type": "input_image",
+                                "file_id": file,
+                            }
+                            for file in files
                         ],
                     ],
                 }
             ],
         )
         result = json.loads(best_img_response.output_text)
-        best_url = result.get("best")
-        return best_url
+        print(result)
+        best_url_idx = result.get("best")
+        for file_id in files:
+            await self.client.files.delete(file_id)
+        return best_url_idx
+
+    async def create_file(self, file_path):
+        with open(file_path, "rb") as file_content:
+            result = await self.client.files.create(
+                file=file_content,
+                purpose="vision",
+            )
+            return result.id
 
 
 async def separate_json(text: str) -> tuple[dict, str]:
@@ -178,3 +206,15 @@ async def separate_json(text: str) -> tuple[dict, str]:
         json_output = {"categories": [], "tags": []}
         html_output = text.strip()
     return json_output, html_output
+
+
+async def is_valid_image(session, url: str) -> bool:
+    try:
+        async with session.head(url, allow_redirects=True) as resp:
+            if resp.status == 200:
+                content_type = resp.headers.get("Content-Type", "")
+                return content_type.startswith("image/")
+    except Exception as e:
+        print(e)
+        return False
+    return False
