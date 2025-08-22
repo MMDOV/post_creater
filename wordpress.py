@@ -29,11 +29,13 @@ class WordPress:
                 result = await resp.json()
                 return result["source_url"]
 
-    async def create_post(self, title: str, content: str):
+    async def create_post(self, title: str, content: str, categories: list, tags: list):
         post_data = {
             "title": title,
             "content": content,
             "status": "draft",
+            "categories": categories,
+            "tags": tags,
         }
 
         url = f"{self.site_url}/wp-json/wp/v2/posts"
@@ -47,3 +49,33 @@ class WordPress:
                     )
                 result = await resp.json()
                 print("Post created:", result["link"])
+
+    async def get_categories(self):
+        params = {"per_page": 100}
+        url = f"{self.site_url}/wp-json/wp/v2/categories"
+        async with aiohttp.ClientSession(
+            auth=aiohttp.BasicAuth(self.username, self.password)
+        ) as session:
+            async with session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    raise Exception(
+                        f"Failed to get categories: {resp.status}, {await resp.text()}"
+                    )
+                result = await resp.json()
+                categories = {cat["id"]: cat["name"] for cat in result}
+                return categories
+
+    async def get_tags(self):
+        params = {"per_page": 100}
+        url = f"{self.site_url}/wp-json/wp/v2/tags"
+        async with aiohttp.ClientSession(
+            auth=aiohttp.BasicAuth(self.username, self.password)
+        ) as session:
+            async with session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    raise Exception(
+                        f"Failed to get tags: {resp.status}, {await resp.text()}"
+                    )
+                result = await resp.json()
+                tags = {tag["id"]: tag["name"] for tag in result}
+                return tags

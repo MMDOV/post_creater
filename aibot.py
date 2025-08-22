@@ -1,6 +1,4 @@
 from openai import AsyncOpenAI
-from io import BytesIO
-import aiofiles
 import re
 import json
 import aiohttp
@@ -42,10 +40,12 @@ class OpenAi:
 
     async def get_text_response(self) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
+
+        print("getting text responsse")
+        print("keyword:", self.keyword)
         article_response = await self.client.responses.create(
             model="gpt-5",
             reasoning={"effort": "medium"},
-            text={"verbosity": "high"},
             tools=[{"type": "web_search_preview"}],
             input=[
                 {
@@ -104,6 +104,7 @@ class OpenAi:
                 },
             ],
         )
+        print(article_response.output_text)
         json_output, html_output = await separate_json(article_response.output_text)
 
         return json_output, html_output

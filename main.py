@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 import aiohttp
 import aiofiles
@@ -61,28 +62,50 @@ async def main():
 
     try:
         file = pd.read_csv(CSV_FILE_PATH, nrows=1)
-        question = str(file["text"][0])
+        # question = str(file["text"][0])
+        question = "سرما خوردگی"
 
         wordpress = WordPress(
             username=wp_api_user, password=wp_api_pass, site_url=site_url
         )
+        all_tags = await wordpress.get_tags()
+        all_categories = await wordpress.get_categories()
+
         client = OpenAi(
             openai_api_key=api_key,
             google_api_key=google_api,
             google_cse_id=google_cse,
             keyword=question,
-            categories=[],
-            tags=[],
+            categories=list(all_categories.values()),
+            tags=list(all_tags.values()),
             related_articles=[],
         )
 
         # TODO: handle json output which is tags / categories
         # TODO: test the images
-        # json_output, html_output = await client.get_text_response()
-        with open("file.html", "r", encoding="utf-8") as file:
-            html_output = file.read()
-        # get_image_task = asyncio.create_task(client.get_image_links())
-        # img_urls = await get_img_task
+        html_file = f"{question}.html"
+        json_file = f"{question}.json"
+        if not os.path.exists(json_file) or not os.path.exists(html_file):
+            json_output, html_output = await client.get_text_response()
+            async with aiofiles.open(json_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(json_output, indent=2, ensure_ascii=False))
+
+            async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
+                await f.write(html_output)
+        else:
+            async with aiofiles.open(json_file, "r", encoding="utf-8") as f:
+                json_output = json.loads(await f.read())
+
+            async with aiofiles.open(html_file, "r", encoding="utf-8") as f:
+                html_output = await f.read()
+        picked_category_names = json_output["categories"]
+        picked_category_ids = [
+            cid for cid, name in all_categories.items() if name in picked_category_names
+        ]
+        picked_tag_names = json_output["tags"]
+        picked_tag_ids = [
+            cid for cid, name in all_tags.items() if name in picked_tag_names
+        ]
 
         # there are placeholders
         # we get every placeholder and serach for images
@@ -124,17 +147,21 @@ async def main():
                 )
                 new_tag = f'<img src="{image_url}" alt="{query}">'
                 html_output = html_output.replace(placeholder, new_tag)
-            # TODO: modify the images using Pillow
-
-            with open("file1.html", "w", encoding="utf-8") as file:
-                file.write(html_output)
+                async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
+                    await f.write(html_output)
+        # TODO: modify the images using Pillow
 
         # TODO: need to still edit this wordpress part after getting access to it
 
-        await wordpress.create_post(title=question, content=html_output)
-        df = pd.read_csv(CSV_FILE_PATH)
-        df = df.drop(index=0)
-        df.to_csv(CSV_FILE_PATH, index=False)
+        await wordpress.create_post(
+            title=question,
+            content=html_output,
+            categories=picked_category_ids,
+            tags=picked_tag_ids,
+        )
+        # df = pd.read_csv(CSV_FILE_PATH)
+        # df = df.drop(index=0)
+        # df.to_csv(CSV_FILE_PATH, index=False)
     except KeyError:
         logging.error("File out of words", exc_info=True)
     except FileNotFoundError:
