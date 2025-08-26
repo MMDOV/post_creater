@@ -109,7 +109,7 @@ class OpenAi:
 
         return json_output, html_output
 
-    async def google_image_search(self, query, num_results=5) -> list[dict]:
+    async def google_image_search(self, query, num_results=1) -> list[dict]:
         print("searching google")
         search_url = "https://www.googleapis.com/customsearch/v1"
         params = {

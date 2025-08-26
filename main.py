@@ -81,8 +81,6 @@ async def main():
             related_articles=[],
         )
 
-        # TODO: handle json output which is tags / categories
-        # TODO: test the images
         html_file = f"{question}.html"
         json_file = f"{question}.json"
         if not os.path.exists(json_file) or not os.path.exists(html_file):
@@ -128,10 +126,7 @@ async def main():
                         )
                         for i, link in enumerate(links)
                     ]
-                    if len(files) > 1:
-                        best_image_url_idx = await client.pick_best_image(files, query)
-                        best_image = files[int(best_image_url_idx) - 1]
-                    elif len(files) == 1:
+                    if len(files) >= 1:
                         best_image = files[0]
                     else:
                         html_output = html_output.replace(placeholder, "")
@@ -150,8 +145,6 @@ async def main():
                 async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
                     await f.write(html_output)
         # TODO: modify the images using Pillow
-
-        # TODO: need to still edit this wordpress part after getting access to it
 
         await wordpress.create_post(
             title=question,
