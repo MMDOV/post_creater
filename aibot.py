@@ -14,6 +14,7 @@ class OpenAi:
         categories: list[str],
         tags: list[str],
         related_articles: list[dict],
+        top_results_info: list[dict],
     ) -> None:
         self.client = AsyncOpenAI(api_key=openai_api_key)
         self.google_api_key = google_api_key
@@ -22,24 +23,17 @@ class OpenAi:
         self.categories = categories
         self.tags = tags
         self.related_articles = related_articles
-
-    async def get_image_links(self):
-        image_response = await self.client.responses.create(
-            model="gpt-5",
-            tools=[{"type": "web_search_preview"}],
-            input=[
-                {
-                    "role": "user",
-                    "content": f"Find 10 high-quality, royalty-free images relevant to '{self.keyword}' "
-                    "and return only direct image URLs in a plain list, no HTML, no markdown.",
-                }
-            ],
-        )
-
-        return image_response
+        self.top_results_info = top_results_info
 
     async def get_text_response(self) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
+        # TODO: add top resutls info to the prompt
+        # FIX: edit the prompt so the search phrases have to ahve the keyword in them and for them to be in english
+        # TODO: make it so the ai includes a summery of the article at the top
+        # FIX: bot needs to NOT have custom styling in tags like <h1> etc.
+        # TODO: add and test search apis other than google for images
+        # FIX: overall fixup the prompt probably remove a lot of it, maybe search for other prompts
+        # FIX: post should have a better title then just the keyword maybe ask the bot to provide that too
 
         print("getting text responsse")
         print("keyword:", self.keyword)
@@ -145,52 +139,6 @@ class OpenAi:
         print(json.dumps(images, indent=4, sort_keys=True))
 
         return images
-
-    async def pick_best_image(self, file_paths: list[str], query: str) -> str:
-        files = [await self.create_file(image) for image in file_paths]
-        prompt_text = (
-            f"Rank the following images from best to worst in describing the word '{query}'. "
-            "Return your answer ONLY as a JSON object with keys 'best' and 'ranking', "
-            "where 'best' is the number of the best image and 'ranking' is a list of all URLs ordered "
-            "only send back numbers no other follow up words just the number"
-        )
-        print("picking best image")
-        print(file_paths)
-        best_img_response = await self.client.responses.create(
-            model="gpt-5",
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": prompt_text,
-                        },
-                        *[
-                            {
-                                "type": "input_image",
-                                "file_id": file,
-                            }
-                            for file in files
-                        ],
-                    ],
-                }
-            ],
-        )
-        result = json.loads(best_img_response.output_text)
-        print(result)
-        best_url_idx = result.get("best")
-        for file_id in files:
-            await self.client.files.delete(file_id)
-        return best_url_idx
-
-    async def create_file(self, file_path):
-        with open(file_path, "rb") as file_content:
-            result = await self.client.files.create(
-                file=file_content,
-                purpose="vision",
-            )
-            return result.id
 
 
 async def separate_json(text: str) -> tuple[dict, str]:

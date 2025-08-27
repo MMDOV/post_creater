@@ -5,6 +5,7 @@ import aiohttp
 import aiofiles
 from aibot import OpenAi
 from wordpress import WordPress
+from scrape import Scrape
 import pandas as pd
 from dotenv import load_dotenv
 import os
@@ -37,6 +38,8 @@ logging.getLogger().addHandler(console)
 # so that we could get a site, its info, all the categories, tags,
 # and pillar words (which are our keywords)
 # and then call the keyword bot on each category and so on
+# WARNING: not a lot of error handling. DO NOT PUSH TO PRODUCTION LIKE THIS
+# ps: I know you're not gonna listen to me and push anyway but hey I tried
 async def main():
     api_key = os.getenv("OPENAI_API_KEY")
     wp_api_user = os.getenv("WP_API_USER")
@@ -71,6 +74,16 @@ async def main():
         all_tags = await wordpress.get_tags()
         all_categories = await wordpress.get_categories()
 
+        scraper = Scrape(
+            google_api_key=google_api,
+            google_cse_id=google_cse,
+            query=question,
+        )
+        try:
+            top_results_info = await scraper.get_top_results_info()
+        except Exception:
+            top_results_info = []
+
         client = OpenAi(
             openai_api_key=api_key,
             google_api_key=google_api,
@@ -79,6 +92,7 @@ async def main():
             categories=list(all_categories.values()),
             tags=list(all_tags.values()),
             related_articles=[],
+            top_results_info=top_results_info,
         )
 
         html_file = f"{question}.html"

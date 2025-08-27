@@ -8,6 +8,7 @@ class WordPress:
         self.password = password
         self.site_url = site_url
 
+    # FIX: meta description of images should be included
     async def upload_image(self, image_path: str):
         print(f"uploading image {image_path}")
         image_filename = os.path.basename(image_path)
@@ -29,6 +30,9 @@ class WordPress:
                 result = await resp.json()
                 return result["source_url"]
 
+    # FIX: move metadescription to the appropreate place (find the place first)
+    # TODO: add schema to the post
+    # FIX: faq part should be styled properly
     async def create_post(self, title: str, content: str, categories: list, tags: list):
         post_data = {
             "title": title,
