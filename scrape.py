@@ -20,24 +20,57 @@ class Scrape:
                     doc = Document(response)
                     soup = BeautifulSoup(doc.summary())
 
-                    # TODO: add voice (if it has voice file or not)
-                    ## also add video count
-                    heading_count = len(
-                        soup.find_all(
-                            name=[
-                                "h1",
-                                "h2",
-                                "h3",
-                            ]
-                        )
+                    plain_text = trafilatura.extract(response)
+                    if plain_text:
+                        word_count = len(plain_text.split())
+                    else:
+                        word_count = 0
+
+                    headings = soup.find_all(
+                        name=[
+                            "h1",
+                            "h2",
+                            "h3",
+                        ]
                     )
-                    image_count = len(soup.find_all(name="img"))
-                    link_count = len(soup.find_all(name="a"))
+                    if headings:
+                        heading_count = len(headings)
+                    else:
+                        heading_count = 0
+
+                    images = soup.find_all(name="img")
+                    if images:
+                        image_count = len(images)
+                    else:
+                        image_count = 0
+
+                    links = soup.find_all(name="a")
+                    if links:
+                        link_count = len(links)
+                    else:
+                        link_count = 0
+
+                    audios = soup.find_all(name="audio")
+                    if audios:
+                        audio_count = len(audios)
+                    else:
+                        audio_count = 0
+
+                    videos = soup.find_all(name=["video", "iframe"])
+                    if videos:
+                        video_count = len(videos)
+                    else:
+                        video_count = 0
+
                     info = {
-                        "heading": heading_count,
-                        "image": image_count,
-                        "link": link_count,
-                        "body": doc.summary(),
+                        "main_title": doc.title(),
+                        "word_count": word_count,
+                        "heading_count": heading_count,
+                        "image_count": image_count,
+                        "link_count": link_count,
+                        "audio_count": audio_count,
+                        "video_count": video_count,
+                        "body": doc.summary(html_partial=True),
                     }
                     data.append(info)
                 else:

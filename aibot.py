@@ -27,13 +27,15 @@ class OpenAi:
 
     async def get_text_response(self) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
-        # TODO: add top resutls info to the prompt
-        # FIX: edit the prompt so the search phrases have to ahve the keyword in them and for them to be in english
-        # TODO: make it so the ai includes a summery of the article at the top
-        # FIX: bot needs to NOT have custom styling in tags like <h1> etc.
         # TODO: add and test search apis other than google for images
         # FIX: overall fixup the prompt probably remove a lot of it, maybe search for other prompts
-        # FIX: post should have a better title then just the keyword maybe ask the bot to provide that too
+        # TODO: test the new prompt and see if it works things added are:
+        ## top result info
+        ## search phrases are now better (not english yet that needs test too)
+        ## should include summery
+        ## should not have custom styling
+        ## the title and faq should be part of the json and usable
+        # FIX: make sure that the prompt including {} doesnt break it when sending the request
 
         print("getting text responsse")
         print("keyword:", self.keyword)
@@ -48,6 +50,8 @@ class OpenAi:
                         "Return the result as clean HTML, but do NOT include <html>, <head>, or <body> tags. "
                         "Wrap the entire content in a <div> with lang='fa' and dir='rtl'. "
                         "Style the content for good readability with appropriate spacing and formatting for Persian. "
+                        "Use clean HTML for structure only (e.g., <h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.). "
+                        "Do NOT add inline styles, CSS classes, or custom attributes so that the WordPress theme styling is not broken. "
                         "Verify your info and make sure it is up to date and correct. "
                         "Only return valid HTML. No code blocks or markdown formatting."
                     ),
@@ -55,45 +59,61 @@ class OpenAi:
                 {
                     "role": "user",
                     "content": f"""
-                        Create a 1500-word SEO-optimized article focused on Primary Keyword “{self.keyword}”.
-                        Structure the article with 12 headings that integrate the primary keyword naturally in the first 100 words,
-                        2–3 subheadings, and the conclusion. Include a meta description (under 160 characters) containing Primary Keyword.
-                        Use simple language, short paragraphs (≤3 lines), and ensure readability (Flesch-Kincaid Grade 8–9).
+                        Create a 1500-word SEO-optimized article focused on Primary Keyword: “{
+                        self.keyword
+                    }”.
 
-                        Add 3 FAQs addressing common user queries about the Topic, formatted as: Q: ... A:...
+                        Take into account the following data extracted from the top 5 Google results for this keyword:
+                        {self.top_results_info}
 
-                        Here is a list of related internal blog articles. Insert hyperlinks to them wherever relevant 
-                        in the article, using natural descriptive anchor text from their titles or summaries. 
-                        You may link multiple times to the same article if it’s relevant in different sections, 
-                        but avoid keyword stuffing. Do not make up links that are not in this list.
+                        Use this information to improve relevance, heading structure, and content coverage, while ensuring originality (do not copy text).
+
+                        Structure:
+                        - Title: Write a compelling, SEO-friendly blog post title.
+                        - Summary: Provide a short summary paragraph at the very top that concisely explains what the entire article covers.
+                        - Meta description (≤160 characters) containing the Primary Keyword.
+                        - Introduction (≈100 words ending with: "In this guide, we’ll cover...")
+                        - 12 main headings (include the Primary Keyword naturally in the first 100 words).
+                        - 2–3 subheadings under relevant main headings.
+                        - Short paragraphs (≤3 lines) written in simple, clear language (Flesch-Kincaid Grade 8–9).
+                        - Conclusion.
+                        - 3 FAQs addressing common user queries about the Topic (these must also be included in the JSON output).
+
+                        Internal Linking:
+                        Here is a list of related internal blog articles. Insert hyperlinks to them wherever relevant in the article, using natural descriptive anchor text from their titles or summaries. You may link multiple times to the same article if relevant, but avoid keyword stuffing. Do not make up links that are not in this list.
 
                         Related Articles:
                         {self.related_articles}
 
+                        Image Placeholders:
                         Whenever you mention something that could be illustrated visually, insert an HTML placeholder tag like:
-                        <placeholder-img>short descriptive sentence of the image to search for</placeholder-img>
-                        The description should be specific enough to search for relevant images on Google.
-                        Do not insert actual <img> tags or image URLs, only this placeholder.
+                        <placeholder-img>{
+                        self.keyword
+                    }: short descriptive sentence of the image to search for</placeholder-img>
+                        The description must always include the Primary Keyword (or part of it) to ensure relevance to the article topic.
+                        Do not insert actual <img> tags or URLs, only this placeholder.
 
-                        After the article, return a JSON block (outside of the HTML) selecting the most relevant
-                        categories and tags from the lists below based on the content you generated:
+                        Final Output:
+                        After the full article (HTML content), provide a JSON block containing:
+                        - The post title you generated.
+                        - The most relevant categories and tags.
+                        - The FAQs as structured objects.
 
                         Categories: {self.categories}
                         Tags: {self.tags}
 
                         Output format (outside the HTML):
-                        {{
+                        {
+                        "title": "Generated SEO Title Here",
                           "categories": ["category1", "category2"],
-                          "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
-                        }}
+                          "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+                          "faqs": [
+                            {"question": "Q1 text", "answer": "A1 text"},
+                            {"question": "Q2 text", "answer": "A2 text"},
+                            {"question": "Q3 text", "answer": "A3 text"}
+                          ]
+                        }
 
-                        Output format:
-                        Meta Description
-                        Introduction (100 words ending with 'In this guide, we’ll cover...')
-                        12 headings with content
-                        FAQs
-                        Internal links placed naturally in the HTML
-                        Image placeholders inserted where relevant
                     """,
                 },
             ],

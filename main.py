@@ -119,6 +119,9 @@ async def main():
             cid for cid, name in all_tags.items() if name in picked_tag_names
         ]
 
+        faqs = json_output["faqs"]
+        post_title = json_output["title"]
+
         # there are placeholders
         # we get every placeholder and serach for images
         # we give ai the images to rank based on the query
@@ -161,10 +164,11 @@ async def main():
         # TODO: modify the images using Pillow
 
         await wordpress.create_post(
-            title=question,
+            title=post_title,
             content=html_output,
             categories=picked_category_ids,
             tags=picked_tag_ids,
+            faqs=faqs,
         )
         # df = pd.read_csv(CSV_FILE_PATH)
         # df = df.drop(index=0)

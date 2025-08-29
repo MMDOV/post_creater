@@ -32,11 +32,21 @@ class WordPress:
 
     # FIX: move metadescription to the appropreate place (find the place first)
     # TODO: add schema to the post
-    # FIX: faq part should be styled properly
-    async def create_post(self, title: str, content: str, categories: list, tags: list):
+    # TODO: test faq to see if it works you might need to change it to the other version
+    async def create_post(
+        self, title: str, content: str, categories: list, tags: list, faqs: list[dict]
+    ):
+        faq_block = ""
+        for faq in faqs:
+            question = str(faq.get("question"))
+            answer = str(faq.get("answer"))
+            faq_template = '<!-- wp:faq/question {"question":"<question>"} -->\n<p><answer></p>\n<!-- /wp:faq/question -->'.replace(
+                "<question>", question
+            ).replace("<answer>", answer)
+            faq_block = faq_block + "\n\n" + faq_template
         post_data = {
             "title": title,
-            "content": content,
+            "content": content + faq_block,
             "status": "draft",
             "categories": categories,
             "tags": tags,
