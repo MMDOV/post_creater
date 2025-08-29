@@ -103,16 +103,16 @@ class OpenAi:
                         Tags: {self.tags}
 
                         Output format (outside the HTML):
-                        {
+                        {{
                         "title": "Generated SEO Title Here",
                           "categories": ["category1", "category2"],
                           "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
                           "faqs": [
-                            {"question": "Q1 text", "answer": "A1 text"},
-                            {"question": "Q2 text", "answer": "A2 text"},
-                            {"question": "Q3 text", "answer": "A3 text"}
+                            {{"question": "Q1 text", "answer": "A1 text"}},
+                            {{"question": "Q2 text", "answer": "A2 text"}},
+                            {{"question": "Q3 text", "answer": "A3 text"}}
                           ]
-                        }
+                        }}
 
                     """,
                 },
