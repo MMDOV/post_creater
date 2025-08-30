@@ -8,8 +8,6 @@ class OpenAi:
     def __init__(
         self,
         openai_api_key: str,
-        google_api_key: str,
-        google_cse_id: str,
         keyword: str,
         categories: list[str],
         tags: list[str],
@@ -17,8 +15,6 @@ class OpenAi:
         top_results_info: list[dict],
     ) -> None:
         self.client = AsyncOpenAI(api_key=openai_api_key)
-        self.google_api_key = google_api_key
-        self.google_cse_id = google_cse_id
         self.keyword = keyword
         self.categories = categories
         self.tags = tags
@@ -27,15 +23,13 @@ class OpenAi:
 
     async def get_text_response(self) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
-        # TODO: add and test search apis other than google for images
-        # FIX: overall fixup the prompt probably remove a lot of it, maybe search for other prompts
         # TODO: test the new prompt and see if it works things added are:
         ## top result info
-        ## search phrases are now better (not english yet that needs test too)
+        ## search phrases are now better
         ## should include summery
         ## should not have custom styling
         ## the title and faq should be part of the json and usable
-        # FIX: make sure that the prompt including {} doesnt break it when sending the request
+        ## should have acceptable images
 
         print("getting text responsse")
         print("keyword:", self.keyword)
@@ -87,10 +81,9 @@ class OpenAi:
 
                         Image Placeholders:
                         Whenever you mention something that could be illustrated visually, insert an HTML placeholder tag like:
-                        <placeholder-img>{
-                        self.keyword
-                    }: short descriptive sentence of the image to search for</placeholder-img>
+                        <placeholder-img>short descriptive sentence of the image to search for in english</placeholder-img>
                         The description must always include the Primary Keyword (or part of it) to ensure relevance to the article topic.
+                        notice that unlike the post itself the description of the image should be in english
                         Do not insert actual <img> tags or URLs, only this placeholder.
 
                         Final Output:
@@ -123,43 +116,6 @@ class OpenAi:
 
         return json_output, html_output
 
-    async def google_image_search(self, query, num_results=1) -> list[dict]:
-        print("searching google")
-        search_url = "https://www.googleapis.com/customsearch/v1"
-        params = {
-            "q": query,
-            "cx": self.google_cse_id,
-            "key": self.google_api_key,
-            "searchType": "image",
-            "num": min(num_results * 2, 10),
-        }
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(search_url, params=params) as response:
-                response.raise_for_status()
-                results = await response.json()
-
-        images = []
-        async with aiohttp.ClientSession() as session:
-            for item in results.get("items", []):
-                link = item.get("link", "")
-                if await is_valid_image(session, link) and str(link).endswith(
-                    (".jpg", ".jpeg", ".png", ".webp")
-                ):
-                    images.append(
-                        {
-                            "title": item.get("title"),
-                            "link": link,
-                            "thumbnail": item.get("image", {}).get("thumbnailLink"),
-                            "context_link": item.get("image", {}).get("contextLink"),
-                        }
-                    )
-                if len(images) >= num_results:
-                    break
-        print(json.dumps(images, indent=4, sort_keys=True))
-
-        return images
-
 
 async def separate_json(text: str) -> tuple[dict, str]:
     print("trying to seperate")
@@ -175,15 +131,3 @@ async def separate_json(text: str) -> tuple[dict, str]:
         json_output = {"categories": [], "tags": []}
         html_output = text.strip()
     return json_output, html_output
-
-
-async def is_valid_image(session, url: str) -> bool:
-    try:
-        async with session.head(url, allow_redirects=True) as resp:
-            if resp.status == 200:
-                content_type = resp.headers.get("Content-Type", "")
-                return content_type.startswith("image/")
-    except Exception as e:
-        print(e)
-        return False
-    return False

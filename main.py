@@ -3,6 +3,7 @@ import json
 import re
 import aiohttp
 import aiofiles
+from aiohttp.helpers import quoted_string
 from aibot import OpenAi
 from wordpress import WordPress
 from scrape import Scrape
@@ -41,20 +42,15 @@ logging.getLogger().addHandler(console)
 # WARNING: not a lot of error handling. DO NOT PUSH TO PRODUCTION LIKE THIS
 # ps: I know you're not gonna listen to me and push anyway but hey I tried
 async def main():
-    api_key = os.getenv("OPENAI_API_KEY")
-    wp_api_user = os.getenv("WP_API_USER")
-    wp_api_pass = os.getenv("WP_API_PASS")
-    site_url = os.getenv("SITE_URL")
-    google_api = os.getenv("GOOGLE_API")
-    google_cse = os.getenv("GOOGLE_CSE")
-    if (
-        not api_key
-        or not wp_api_user
-        or not wp_api_pass
-        or not site_url
-        or not google_api
-        or not google_cse
-    ):
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    wp_api_user = os.getenv("WP_API_USER", "")
+    wp_api_pass = os.getenv("WP_API_PASS", "")
+    site_url = os.getenv("SITE_URL", "")
+    google_api = os.getenv("GOOGLE_API", "")
+    google_cse = os.getenv("GOOGLE_CSE", "")
+    pixabay_api = os.getenv("PIXABAY_API", "")
+    pexels_api = os.getenv("PEXELS_API", "")
+    if not api_key or not wp_api_user or not wp_api_pass or not site_url:
         logging.error(
             "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE",
             exc_info=True,
@@ -77,17 +73,15 @@ async def main():
         scraper = Scrape(
             google_api_key=google_api,
             google_cse_id=google_cse,
-            query=question,
+            pixabay_api_key=pixabay_api,
         )
         try:
-            top_results_info = await scraper.get_top_results_info()
+            top_results_info = await scraper.get_top_results_info(query=question)
         except Exception:
             top_results_info = []
 
         client = OpenAi(
             openai_api_key=api_key,
-            google_api_key=google_api,
-            google_cse_id=google_cse,
             keyword=question,
             categories=list(all_categories.values()),
             tags=list(all_tags.values()),
@@ -135,7 +129,7 @@ async def main():
         if queries:
             for query, placeholder in zip(queries, placeholders):
                 async with aiohttp.ClientSession() as session:
-                    images = await client.google_image_search(query)
+                    images = await scraper.google_image_search(query)
                     links = [str(image["link"]) for image in images]
                     files = [
                         await download_image(
