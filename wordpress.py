@@ -45,18 +45,20 @@ class WordPress:
                         "Upload succeeded but no JSON and no location header"
                     )
 
-    # FIX: move metadescription to the appropreate place (find the place first)
+    # TODO: test and see if metadescription works
     # TODO: add schema to the post
     # TODO: test faq to see if it works you might need to change it to the other version
     async def create_post(
         self,
         title: str,
         content: str,
+        meta: str,
         faqs: list[dict],
         categories: list = [],
         tags: list = [],
     ):
         faq_block = ""
+        meta_block = f'<meta name="description" content="{meta}" />'
         for faq in faqs:
             question = str(faq.get("question"))
             answer = str(faq.get("answer"))
@@ -66,7 +68,7 @@ class WordPress:
             faq_block = faq_block + "\n\n" + faq_template
         post_data = {
             "title": title,
-            "content": content + faq_block,
+            "content": content + "\n\n" + meta_block + faq_block,
             "status": "draft",
             "categories": categories,
             "tags": tags,

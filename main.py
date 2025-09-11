@@ -125,6 +125,7 @@ async def main():
 
         faqs = json_output["faqs"]
         post_title = json_output["title"]
+        meta = json_output["meta"]
 
         # there are placeholders
         # we get every placeholder and serach for images
@@ -188,6 +189,7 @@ async def main():
             title=post_title,
             content=html_output,
             faqs=faqs,
+            meta=meta,
         )
         # df = pd.read_csv(CSV_FILE_PATH)
         # df = df.drop(index=0)

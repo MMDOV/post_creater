@@ -57,13 +57,11 @@ class OpenAi:
                         Structure:
                         - Title: Write a compelling, SEO-friendly blog post title.
                         - Summary: Provide a short summary paragraph at the very top that concisely explains what the entire article covers.
-                        - Meta description (≤160 characters) containing the Primary Keyword.
                         - Introduction (≈100 words)
                         - 12 main headings (include the Primary Keyword naturally in the first 100 words).
                         - 2–3 subheadings under relevant main headings.
                         - Short paragraphs (≤3 lines) written in simple, clear language (Flesch-Kincaid Grade 8–9).
                         - Conclusion.
-                        - 3 FAQs addressing common user queries about the Topic (these must also be included in the JSON output).
 
                         Internal Linking:
                         Here is a list of related internal blog articles. Insert hyperlinks to them wherever relevant in the article, using natural descriptive anchor text from their titles or summaries. You may link multiple times to the same article if relevant, but avoid keyword stuffing. Do not make up links that are not in this list.
@@ -82,7 +80,8 @@ class OpenAi:
                         After the full article (HTML content), provide a JSON block containing:
                         - The post title you generated.
                         - The most relevant categories and tags.
-                        - The FAQs as structured objects.
+                        - 3 FAQs addressing common user queries about the Topic as structured objects (these must only be included in the JSON output).
+                        - Meta description (≤160 characters) containing the Primary Keyword.
 
                         Categories: {self.categories}
                         Tags: {self.tags}
@@ -97,6 +96,7 @@ class OpenAi:
                             {{"question": "Q2 text", "answer": "A2 text"}},
                             {{"question": "Q3 text", "answer": "A3 text"}}
                           ]
+                          "meta" : "Generated meta description"
                         }}
 
                     """,
