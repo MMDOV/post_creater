@@ -1,7 +1,7 @@
 from openai import AsyncOpenAI
 import re
 import json
-import aiohttp
+import base64
 
 
 class OpenAi:
@@ -12,24 +12,15 @@ class OpenAi:
         categories: list[str],
         tags: list[str],
         related_articles: list[dict],
-        top_results_info: list[dict],
     ) -> None:
         self.client = AsyncOpenAI(api_key=openai_api_key)
         self.keyword = keyword
         self.categories = categories
         self.tags = tags
         self.related_articles = related_articles
-        self.top_results_info = top_results_info
 
-    async def get_text_response(self) -> tuple[dict, str]:
+    async def get_text_response(self, top_results_info) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
-        # TODO: test the new prompt and see if it works things added are:
-        ## top result info
-        ## search phrases are now better
-        ## should include summery
-        ## should not have custom styling
-        ## the title and faq should be part of the json and usable
-        ## should have acceptable images
 
         print("getting text responsse")
         print("keyword:", self.keyword)
@@ -58,7 +49,8 @@ class OpenAi:
                     }”.
 
                         Take into account the following data extracted from the top 5 Google results for this keyword:
-                        {self.top_results_info}
+                        {top_results_info}
+                        You can change the number of stuff (Headings, images, etc) that you include based on this info but keep the main structure the way that is described to you.
 
                         Use this information to improve relevance, heading structure, and content coverage, while ensuring originality (do not copy text).
 
@@ -66,7 +58,7 @@ class OpenAi:
                         - Title: Write a compelling, SEO-friendly blog post title.
                         - Summary: Provide a short summary paragraph at the very top that concisely explains what the entire article covers.
                         - Meta description (≤160 characters) containing the Primary Keyword.
-                        - Introduction (≈100 words ending with: "In this guide, we’ll cover...")
+                        - Introduction (≈100 words)
                         - 12 main headings (include the Primary Keyword naturally in the first 100 words).
                         - 2–3 subheadings under relevant main headings.
                         - Short paragraphs (≤3 lines) written in simple, clear language (Flesch-Kincaid Grade 8–9).
@@ -82,8 +74,8 @@ class OpenAi:
                         Image Placeholders:
                         Whenever you mention something that could be illustrated visually, insert an HTML placeholder tag like:
                         <placeholder-img>short descriptive sentence of the image to search for in english</placeholder-img>
-                        The description must always include the Primary Keyword (or part of it) to ensure relevance to the article topic.
-                        notice that unlike the post itself the description of the image should be in english
+                        The description must always include the Primary Keyword (or part of it) in english to ensure relevance to the article topic.
+                        notice that unlike the post itself the description of the image should be in english including the primary keyword (or part of it)
                         Do not insert actual <img> tags or URLs, only this placeholder.
 
                         Final Output:
@@ -115,6 +107,26 @@ class OpenAi:
         json_output, html_output = await separate_json(article_response.output_text)
 
         return json_output, html_output
+
+    async def get_image_response(self, prompt: str) -> str:
+        image_prompt = f"""
+        Generate an image that describes the text below best:\n\n
+        {prompt}
+        """
+
+        result = await self.client.images.generate(
+            model="dall-e-3", prompt=image_prompt, response_format="b64_json"
+        )
+        print(result)
+
+        if result:
+            image_base64 = result.data[0].b64_json
+            image_bytes = base64.b64decode(image_base64)
+
+            with open("1.png", "wb") as f:
+                f.write(image_bytes)
+
+        return "1.png"
 
 
 async def separate_json(text: str) -> tuple[dict, str]:

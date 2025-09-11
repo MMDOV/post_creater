@@ -3,7 +3,6 @@ import json
 import re
 import aiohttp
 import aiofiles
-from aiohttp.helpers import quoted_string
 from aibot import OpenAi
 from wordpress import WordPress
 from scrape import Scrape
@@ -67,51 +66,62 @@ async def main():
         wordpress = WordPress(
             username=wp_api_user, password=wp_api_pass, site_url=site_url
         )
-        all_tags = await wordpress.get_tags()
-        all_categories = await wordpress.get_categories()
+        # all_tags = await wordpress.get_tags()
+        # all_categories = await wordpress.get_categories()
 
         scraper = Scrape(
             google_api_key=google_api,
             google_cse_id=google_cse,
             pixabay_api_key=pixabay_api,
+            pexels_api_key=pexels_api,
         )
-        try:
-            top_results_info = await scraper.get_top_results_info(query=question)
-        except Exception:
-            top_results_info = []
-
         client = OpenAi(
             openai_api_key=api_key,
             keyword=question,
-            categories=list(all_categories.values()),
-            tags=list(all_tags.values()),
+            categories=[],
+            tags=[],
             related_articles=[],
-            top_results_info=top_results_info,
         )
 
+        engine = "generate"
         html_file = f"{question}.html"
         json_file = f"{question}.json"
         if not os.path.exists(json_file) or not os.path.exists(html_file):
-            json_output, html_output = await client.get_text_response()
+            print("files not found")
+            try:
+                top_results_info = await scraper.get_top_results_info(query=question)
+            except Exception:
+                top_results_info = []
+            json_output, html_output = await client.get_text_response(
+                top_results_info=top_results_info
+            )
             async with aiofiles.open(json_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(json_output, indent=2, ensure_ascii=False))
 
             async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
                 await f.write(html_output)
         else:
+            print("vanilla files exist")
             async with aiofiles.open(json_file, "r", encoding="utf-8") as f:
                 json_output = json.loads(await f.read())
 
             async with aiofiles.open(html_file, "r", encoding="utf-8") as f:
                 html_output = await f.read()
+        if os.path.exists(f"{engine}_{html_file}"):
+            print("engine file exists")
+            async with aiofiles.open(
+                f"{engine}_{html_file}", "r", encoding="utf-8"
+            ) as f:
+                html_output = await f.read()
+
         picked_category_names = json_output["categories"]
-        picked_category_ids = [
-            cid for cid, name in all_categories.items() if name in picked_category_names
-        ]
+        # picked_category_ids = [
+        #    cid for cid, name in all_categories.items() if name in picked_category_names
+        # ]
         picked_tag_names = json_output["tags"]
-        picked_tag_ids = [
-            cid for cid, name in all_tags.items() if name in picked_tag_names
-        ]
+        # picked_tag_ids = [
+        #    cid for cid, name in all_tags.items() if name in picked_tag_names
+        # ]
 
         faqs = json_output["faqs"]
         post_title = json_output["title"]
@@ -127,41 +137,56 @@ async def main():
         )
 
         if queries:
+            print("engine:", engine)
             for query, placeholder in zip(queries, placeholders):
                 async with aiohttp.ClientSession() as session:
-                    images = await scraper.google_image_search(query)
-                    links = [str(image["link"]) for image in images]
-                    files = [
-                        await download_image(
-                            session, link, f"{str(i)}.{link.split('.')[-1]}"
+                    if engine != "generate":
+                        if engine == "pixabay":
+                            images = await scraper.pixabay_image_search(query)
+                        elif engine == "pexels":
+                            images = await scraper.pexels_image_search(query)
+                        else:
+                            images = await scraper.google_image_search(query)
+                        files = [
+                            await download_image(
+                                session, link, f"{str(i)}.{link.split('.')[-1]}"
+                            )
+                            for i, link in enumerate(images)
+                        ]
+                        if len(files) >= 1:
+                            best_image = files[0]
+                        else:
+                            html_output = html_output.replace(placeholder, "")
+                            continue
+                        img_type = best_image.split(".")[-1]
+                        for file in files:
+                            if file != best_image:
+                                os.remove(file)
+                        os.rename(
+                            best_image, f"{query.replace(' ', '_')}_{engine}.{img_type}"
                         )
-                        for i, link in enumerate(links)
-                    ]
-                    if len(files) >= 1:
-                        best_image = files[0]
                     else:
-                        html_output = html_output.replace(placeholder, "")
-                        continue
-                    img_type = best_image.split(".")[-1]
-                    for file in files:
-                        if file != best_image:
-                            os.remove(file)
-                    os.rename(best_image, f"{query.replace(' ', '_')}.{img_type}")
-                    print(best_image)
+                        print("generating image")
+                        best_image = await client.get_image_response(query)
+                        img_type = best_image.split(".")[-1]
+                        os.rename(
+                            best_image, f"{query.replace(' ', '_')}_{engine}.{img_type}"
+                        )
                 image_url = await wordpress.upload_image(
-                    image_path=f"{query.replace(' ', '_')}.{img_type}"
+                    image_path=f"{query.replace(' ', '_')}_{engine}.{img_type}"
                 )
                 new_tag = f'<img src="{image_url}" alt="{query}">'
                 html_output = html_output.replace(placeholder, new_tag)
-                async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
+                print("saving to file")
+                async with aiofiles.open(
+                    f"{engine}_{html_file}", "w", encoding="utf-8"
+                ) as f:
                     await f.write(html_output)
         # TODO: modify the images using Pillow
 
         await wordpress.create_post(
             title=post_title,
             content=html_output,
-            categories=picked_category_ids,
-            tags=picked_tag_ids,
             faqs=faqs,
         )
         # df = pd.read_csv(CSV_FILE_PATH)

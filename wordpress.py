@@ -1,5 +1,6 @@
 import aiohttp
 import os
+import json
 
 
 class WordPress:
@@ -9,6 +10,7 @@ class WordPress:
         self.site_url = site_url
 
     # FIX: meta description of images should be included
+    # FIX: the location shit that gpt gave you does nothing
     async def upload_image(self, image_path: str):
         print(f"uploading image {image_path}")
         image_filename = os.path.basename(image_path)
@@ -26,15 +28,33 @@ class WordPress:
 
             async with session.post(url, headers=headers, data=data) as resp:
                 if resp.status != 201:
-                    raise Exception(f"Failed to upload image: {resp.status}")
-                result = await resp.json()
-                return result["source_url"]
+                    body = await resp.text()
+                    raise Exception(f"Failed to upload image: {resp.status}, {body}")
+
+                try:
+                    result = await resp.json()
+                    return result["source_url"]
+                except aiohttp.ContentTypeError:
+                    body = await resp.text()
+                    raise Exception(f"Unexpected response type: {resp.status}, {body}")
+                except json.JSONDecodeError:
+                    location = resp.headers.get("Location")
+                    if location:
+                        return location
+                    raise Exception(
+                        "Upload succeeded but no JSON and no location header"
+                    )
 
     # FIX: move metadescription to the appropreate place (find the place first)
     # TODO: add schema to the post
     # TODO: test faq to see if it works you might need to change it to the other version
     async def create_post(
-        self, title: str, content: str, categories: list, tags: list, faqs: list[dict]
+        self,
+        title: str,
+        content: str,
+        faqs: list[dict],
+        categories: list = [],
+        tags: list = [],
     ):
         faq_block = ""
         for faq in faqs:

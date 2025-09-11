@@ -19,6 +19,7 @@ class Scrape:
         self.pixabay_api_key = pixabay_api_key
         self.pexels_api_key = pexels_api_key
 
+    # FIX: ignore wikipedia (and other sites if you can think of more)
     async def get_top_results_info(self, query: str) -> list[dict]:
         if not self.google_cse_id or not self.google_api_key:
             raise Exception("google cse id and api key are needed for this action!")
@@ -29,7 +30,7 @@ class Scrape:
                 response = trafilatura.fetch_url(result)
                 if response:
                     doc = Document(response)
-                    soup = BeautifulSoup(doc.summary())
+                    soup = BeautifulSoup(doc.summary(), "lxml")
 
                     plain_text = trafilatura.extract(response)
                     if plain_text:
@@ -81,13 +82,13 @@ class Scrape:
                         "link_count": link_count,
                         "audio_count": audio_count,
                         "video_count": video_count,
-                        "body": doc.summary(html_partial=True),
                     }
                     data.append(info)
                 else:
                     continue
         else:
             raise Exception("no search results found")
+        print(data)
         return data
 
     async def _google_search(self, query: str, num_results=5) -> list[str]:
@@ -131,14 +132,7 @@ class Scrape:
                 if await is_valid_image(session, link) and str(link).endswith(
                     (".jpg", ".jpeg", ".png", ".webp")
                 ):
-                    images.append(
-                        {
-                            "title": item.get("title"),
-                            "link": link,
-                            "thumbnail": item.get("image", {}).get("thumbnailLink"),
-                            "context_link": item.get("image", {}).get("contextLink"),
-                        }
-                    )
+                    images.append(link)
                 if len(images) >= num_results:
                     break
         print(json.dumps(images, indent=4, sort_keys=True))
@@ -158,6 +152,7 @@ class Scrape:
     ) -> list[str]:
         if not self.pixabay_api_key:
             raise Exception("pixabay api key is needed for this action!")
+        print("Searching pixabay")
         pixabay_url = r"https://pixabay.com/api/"
         params = {
             "key": self.pixabay_api_key,
@@ -177,6 +172,8 @@ class Scrape:
                 response.raise_for_status()
                 results = await response.json()
 
+        print(results)
+
         return [image["largeImageURL"] for image in results.get("hits")]
 
     async def pexels_image_search(
@@ -185,6 +182,7 @@ class Scrape:
         if not self.pexels_api_key:
             raise Exception("pexels api key is needed for this action!")
 
+        print("searching pexels")
         pexels_url = r"https://api.pexels.com/v1/search"
         headers = {"Authorization": self.pexels_api_key}
         params = {
@@ -199,6 +197,8 @@ class Scrape:
             ) as response:
                 response.raise_for_status()
                 results = await response.json()
+
+        print(results)
         return [photo["src"]["original"] for photo in results["photos"]]
 
 
