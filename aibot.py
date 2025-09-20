@@ -1,4 +1,4 @@
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, responses
 import re
 import json
 import base64
@@ -18,35 +18,49 @@ class OpenAi:
         self.categories = categories
         self.tags = tags
         self.related_articles = related_articles
+        self.conversation_id = None
 
-    async def get_text_response(self, top_results_info) -> tuple[dict, str]:
-        # TODO: still need to figure out how are we adding the pillar page
+    async def _initialize_conversation(self) -> None:
+        if not self.conversation_id:
+            conversation = await self.client.conversations.create()
+            self.conversation_id = conversation.id
 
-        print("getting text responsse")
-        print("keyword:", self.keyword)
-        article_response = await self.client.responses.create(
+    async def _get_text_response(self, input):
+        await self._initialize_conversation()
+        self.current_response = await self.client.responses.create(
             model="gpt-5",
             reasoning={"effort": "medium"},
             tools=[{"type": "web_search_preview"}],
-            input=[
-                {
-                    "role": "developer",
-                    "content": (
-                        "Return the result as clean HTML, but do NOT include <html>, <head>, or <body> tags. "
-                        "Wrap the entire content in a <div> with lang='fa' and dir='rtl'. "
-                        "Style the content for good readability with appropriate spacing and formatting for Persian. "
-                        "Use clean HTML for structure only (e.g., <h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.). "
-                        "Do NOT add inline styles, CSS classes, or custom attributes so that the WordPress theme styling is not broken. "
-                        "Verify your info and make sure it is up to date and correct. "
-                        "Only return valid HTML. No code blocks or markdown formatting."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"""
+            input=input,
+            conversation=self.conversation_id,
+        )
+
+    async def get_full_response(self, top_results_info) -> tuple[dict, str]:
+        # TODO: still need to figure out how are we adding the pillar page
+        # TODO: make this conversation based so you could feed it more data
+        # FIX: change the prompt so it knows about the conversation and we can feed it more data
+
+        print("getting text responsse")
+        print("keyword:", self.keyword)
+        initial_input = [
+            {
+                "role": "developer",
+                "content": (
+                    "Return the result as clean HTML, but do NOT include <html>, <head>, or <body> tags. "
+                    "Wrap the entire content in a <div> with lang='fa' and dir='rtl'. "
+                    "Style the content for good readability with appropriate spacing and formatting for Persian. "
+                    "Use clean HTML for structure only (e.g., <h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.). "
+                    "Do NOT add inline styles, CSS classes, or custom attributes so that the WordPress theme styling is not broken. "
+                    "Verify your info and make sure it is up to date and correct. "
+                    "Only return valid HTML. No code blocks or markdown formatting."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"""
                         Create a 1500-word SEO-optimized article focused on Primary Keyword: “{
-                        self.keyword
-                    }”.
+                    self.keyword
+                }”.
 
                         Take into account the following data extracted from the top 5 Google results for this keyword:
                         {top_results_info}
@@ -100,11 +114,13 @@ class OpenAi:
                         }}
 
                     """,
-                },
-            ],
+            },
+        ]
+        await self._get_text_response(input=initial_input)
+        print(self.current_response.output_text)
+        json_output, html_output = await separate_json(
+            self.current_response.output_text
         )
-        print(article_response.output_text)
-        json_output, html_output = await separate_json(article_response.output_text)
 
         return json_output, html_output
 

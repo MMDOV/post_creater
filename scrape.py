@@ -19,7 +19,6 @@ class Scrape:
         self.pixabay_api_key = pixabay_api_key
         self.pexels_api_key = pexels_api_key
 
-    # FIX: ignore wikipedia (and other sites if you can think of more)
     async def get_top_results_info(self, query: str) -> list[dict]:
         if not self.google_cse_id or not self.google_api_key:
             raise Exception("google cse id and api key are needed for this action!")
@@ -76,12 +75,14 @@ class Scrape:
 
                     info = {
                         "main_title": doc.title(),
+                        "headings": headings,
                         "word_count": word_count,
                         "heading_count": heading_count,
                         "image_count": image_count,
                         "link_count": link_count,
                         "audio_count": audio_count,
                         "video_count": video_count,
+                        "article_body": doc.summary(),
                     }
                     data.append(info)
                 else:
@@ -97,7 +98,7 @@ class Scrape:
             "q": query,
             "cx": self.google_cse_id,
             "key": self.google_api_key,
-            "num": min(num_results, 10),
+            "num": 10,
         }
 
         async with aiohttp.ClientSession() as session:
@@ -105,7 +106,13 @@ class Scrape:
                 response.raise_for_status()
                 results = await response.json()
 
-        links = [item["link"] for item in results.get("items", [])]
+        links = []
+        for item in results.get("items", []):
+            if len(links) >= num_results:
+                break
+            if not item["link"].startswith("https://www.wikipedia.org/"):
+                links.append(item["link"])
+
         return links
 
     async def google_image_search(self, query: str, num_results: int = 1) -> list[dict]:

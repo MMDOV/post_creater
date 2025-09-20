@@ -46,8 +46,6 @@ class WordPress:
                     )
 
     # TODO: test and see if metadescription works
-    # TODO: add schema to the post
-    # TODO: test faq to see if it works you might need to change it to the other version
     async def create_post(
         self,
         title: str,
