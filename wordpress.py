@@ -46,12 +46,18 @@ class WordPress:
                     )
 
     # TODO: test and see if metadescription works
+    # TODO: add article sources to be passed to the function the formatting for them is:
+    ## <ul>
+    ## <li><a href="https://example.com">Source 1</li>
+    ## <li><a href="https://example.com">Source 2</li>
+    ## </ul>
     async def create_post(
         self,
         title: str,
         content: str,
         meta: str,
         faqs: list[dict],
+        article_sources: str = "",
         categories: list = [],
         tags: list = [],
     ):
@@ -72,6 +78,7 @@ class WordPress:
             "status": "draft",
             "meta": {
                 "faq_items_v2": faq_items,
+                "article_sources": article_sources,
             },
             "categories": categories,
             "tags": tags,
