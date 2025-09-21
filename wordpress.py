@@ -55,19 +55,24 @@ class WordPress:
         categories: list = [],
         tags: list = [],
     ):
-        faq_block = ""
         meta_block = f'<meta name="description" content="{meta}" />'
-        for faq in faqs:
-            question = str(faq.get("question"))
-            answer = str(faq.get("answer"))
-            faq_template = '<!-- wp:faq/question {"question":"<question>"} -->\n<p><answer></p>\n<!-- /wp:faq/question -->'.replace(
-                "<question>", question
-            ).replace("<answer>", answer)
-            faq_block = faq_block + "\n\n" + faq_template
+        if faqs:
+            faq_items = {
+                f"item-{i}": {
+                    "faq_question": str(faq.get("question")),
+                    "faq_answer": str(faq.get("answer")),
+                }
+                for i, faq in enumerate(faqs)
+            }
+        else:
+            faq_items = {}
         post_data = {
             "title": title,
-            "content": content + "\n\n" + meta_block + faq_block,
+            "content": content + "\n\n" + meta_block,
             "status": "draft",
+            "meta": {
+                "faq_items_v2": faq_items,
+            },
             "categories": categories,
             "tags": tags,
         }
