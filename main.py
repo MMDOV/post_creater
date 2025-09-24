@@ -69,8 +69,8 @@ async def main():
         wordpress = WordPress(
             username=wp_api_user, password=wp_api_pass, site_url=site_url
         )
-        # all_tags = await wordpress.get_tags()
-        # all_categories = await wordpress.get_categories()
+        all_tags = await wordpress.get_tags()
+        all_categories = await wordpress.get_categories()
 
         scraper = Scrape(
             google_api_key=google_api,
@@ -95,7 +95,7 @@ async def main():
                 top_results_info = await scraper.get_top_results_info(query=question)
             except Exception:
                 top_results_info = []
-            json_output, html_output = await client.get_text_response(
+            json_output, html_output = await client.get_full_response(
                 top_results_info=top_results_info
             )
             async with aiofiles.open(json_file, "w", encoding="utf-8") as f:
@@ -118,23 +118,19 @@ async def main():
                 html_output = await f.read()
 
         picked_category_names = json_output["categories"]
-        # picked_category_ids = [
-        #    cid for cid, name in all_categories.items() if name in picked_category_names
-        # ]
+        picked_category_ids = [
+            cid for cid, name in all_categories.items() if name in picked_category_names
+        ]
         picked_tag_names = json_output["tags"]
-        # picked_tag_ids = [
-        #    cid for cid, name in all_tags.items() if name in picked_tag_names
-        # ]
+        picked_tag_ids = [
+            cid for cid, name in all_tags.items() if name in picked_tag_names
+        ]
 
         faqs = json_output["faqs"]
         post_title = json_output["title"]
         meta = json_output["meta"]
+        sources = json_output["sources"]
 
-        # there are placeholders
-        # we get every placeholder and serach for images
-        # we give ai the images to rank based on the query
-        # pick the best image and upload it
-        # get the link and replace the image placeholder
         queries = re.findall(r"<placeholder-img>(.*?)</placeholder-img>", html_output)
         placeholders = re.findall(
             r"<placeholder-img>.*?</placeholder-img>", html_output
@@ -144,38 +140,30 @@ async def main():
             print("engine:", engine)
             for query, placeholder in zip(queries, placeholders):
                 async with aiohttp.ClientSession() as session:
-                    if engine != "generate":
-                        if engine == "pixabay":
-                            images = await scraper.pixabay_image_search(query)
-                        elif engine == "pexels":
-                            images = await scraper.pexels_image_search(query)
-                        else:
-                            images = await scraper.google_image_search(query)
-                        files = [
-                            await download_image(
-                                session, link, f"{str(i)}.{link.split('.')[-1]}"
-                            )
-                            for i, link in enumerate(images)
-                        ]
-                        if len(files) >= 1:
-                            best_image = files[0]
-                        else:
-                            html_output = html_output.replace(placeholder, "")
-                            continue
-                        img_type = best_image.split(".")[-1]
-                        for file in files:
-                            if file != best_image:
-                                os.remove(file)
-                        os.rename(
-                            best_image, f"{query.replace(' ', '_')}_{engine}.{img_type}"
-                        )
+                    if engine == "pixabay":
+                        images = await scraper.pixabay_image_search(query)
+                    elif engine == "pexels":
+                        images = await scraper.pexels_image_search(query)
                     else:
-                        print("generating image")
-                        best_image = await client.get_image_response(query)
-                        img_type = best_image.split(".")[-1]
-                        os.rename(
-                            best_image, f"{query.replace(' ', '_')}_{engine}.{img_type}"
+                        images = await scraper.google_image_search(query)
+                    files = [
+                        await download_image(
+                            session, link, f"{str(i)}.{link.split('.')[-1]}"
                         )
+                        for i, link in enumerate(images)
+                    ]
+                    if len(files) >= 1:
+                        best_image = files[0]
+                    else:
+                        html_output = html_output.replace(placeholder, "")
+                        continue
+                    img_type = best_image.split(".")[-1]
+                    for file in files:
+                        if file != best_image:
+                            os.remove(file)
+                    os.rename(
+                        best_image, f"{query.replace(' ', '_')}_{engine}.{img_type}"
+                    )
                 image_url = await wordpress.upload_image(
                     image_path=f"{query.replace(' ', '_')}_{engine}.{img_type}"
                 )
@@ -193,6 +181,9 @@ async def main():
             content=html_output,
             faqs=faqs,
             meta=meta,
+            article_sources=sources,
+            categories=picked_category_ids,
+            tags=picked_tag_ids,
         )
         # df = pd.read_csv(CSV_FILE_PATH)
         # df = df.drop(index=0)

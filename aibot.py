@@ -35,88 +35,119 @@ class OpenAi:
             conversation=self.conversation_id,
         )
 
-    async def get_full_response(self, top_results_info) -> tuple[dict, str]:
+    async def get_full_response(self, top_results_info: list[dict]) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
-        # TODO: make this conversation based so you could feed it more data
-        # FIX: change the prompt so it knows about the conversation and we can feed it more data
 
         print("getting text responsse")
         print("keyword:", self.keyword)
-        initial_input = [
+
+        messages = [
             {
                 "role": "developer",
                 "content": (
-                    "Return the result as clean HTML, but do NOT include <html>, <head>, or <body> tags. "
-                    "Wrap the entire content in a <div> with lang='fa' and dir='rtl'. "
-                    "Style the content for good readability with appropriate spacing and formatting for Persian. "
-                    "Use clean HTML for structure only (e.g., <h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.). "
-                    "Do NOT add inline styles, CSS classes, or custom attributes so that the WordPress theme styling is not broken. "
-                    "Verify your info and make sure it is up to date and correct. "
-                    "Only return valid HTML. No code blocks or markdown formatting."
+                    "You are an assistant that will receive instructions for writing a Persian SEO blog post.\n"
+                    "- Do NOT generate any blog content until I explicitly send the signal [FINAL].\n"
+                    "- For every message before [FINAL], simply acknowledge (e.g. 'Noted').\n"
+                    "- When [FINAL] is received, combine ALL previously provided data with the final generation "
+                    "instructions to produce the complete output."
+                ),
+            },
+            {
+                "role": "developer",
+                "content": (
+                    "When generation begins:\n"
+                    "• Return the result as clean HTML only—NO <html>, <head>, or <body> tags.\n"
+                    "• Wrap the entire content in a single <div lang='fa' dir='rtl'>.\n"
+                    "• Use only clean structural tags (<h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.).\n"
+                    "• Do NOT add inline styles, CSS classes, or custom attributes (to avoid breaking theme styling).\n"
+                    "• Verify all information and ensure it is up-to-date and correct.\n"
+                    "• After the HTML, append a JSON block containing:\n"
+                    '   - "title": generated SEO title\n'
+                    '   - "categories": [list of relevant categories]\n'
+                    '   - "tags": [list of 5 relevant tags]\n'
+                    '   - "faqs": [3 objects {"question","answer"}]\n'
+                    '   - "meta": meta description (≤160 characters containing the Primary Keyword)\n'
+                    '   - "sources": list of objects with "title" and "link" for every source you referenced in the article'
                 ),
             },
             {
                 "role": "user",
-                "content": f"""
-                        Create a 1500-word SEO-optimized article focused on Primary Keyword: “{
-                    self.keyword
-                }”.
-
-                        Take into account the following data extracted from the top 5 Google results for this keyword:
-                        {top_results_info}
-                        You can change the number of stuff (Headings, images, etc) that you include based on this info but keep the main structure the way that is described to you.
-
-                        Use this information to improve relevance, heading structure, and content coverage, while ensuring originality (do not copy text).
-
-                        Structure:
-                        - Title: Write a compelling, SEO-friendly blog post title.
-                        - Summary: Provide a short summary paragraph at the very top that concisely explains what the entire article covers.
-                        - Introduction (≈100 words)
-                        - 12 main headings (include the Primary Keyword naturally in the first 100 words).
-                        - 2–3 subheadings under relevant main headings.
-                        - Short paragraphs (≤3 lines) written in simple, clear language (Flesch-Kincaid Grade 8–9).
-                        - Conclusion.
-
-                        Internal Linking:
-                        Here is a list of related internal blog articles. Insert hyperlinks to them wherever relevant in the article, using natural descriptive anchor text from their titles or summaries. You may link multiple times to the same article if relevant, but avoid keyword stuffing. Do not make up links that are not in this list.
-
-                        Related Articles:
-                        {self.related_articles}
-
-                        Image Placeholders:
-                        Whenever you mention something that could be illustrated visually, insert an HTML placeholder tag like:
-                        <placeholder-img>short descriptive sentence of the image to search for in english</placeholder-img>
-                        The description must always include the Primary Keyword (or part of it) in english to ensure relevance to the article topic.
-                        notice that unlike the post itself the description of the image should be in english including the primary keyword (or part of it)
-                        Do not insert actual <img> tags or URLs, only this placeholder.
-
-                        Final Output:
-                        After the full article (HTML content), provide a JSON block containing:
-                        - The post title you generated.
-                        - The most relevant categories and tags.
-                        - 3 FAQs addressing common user queries about the Topic as structured objects (these must only be included in the JSON output).
-                        - Meta description (≤160 characters) containing the Primary Keyword.
-
-                        Categories: {self.categories}
-                        Tags: {self.tags}
-
-                        Output format (outside the HTML):
-                        {{
-                        "title": "Generated SEO Title Here",
-                          "categories": ["category1", "category2"],
-                          "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-                          "faqs": [
-                            {{"question": "Q1 text", "answer": "A1 text"}},
-                            {{"question": "Q2 text", "answer": "A2 text"}},
-                            {{"question": "Q3 text", "answer": "A3 text"}}
-                          ]
-                          "meta" : "Generated meta description"
-                        }}
-
-                    """,
+                "content": (
+                    f'Primary Keyword: "{self.keyword}"\n'
+                    "Do not write the article yet—just acknowledge."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "You will receive the data extracted from the top 5 Google results for this keyword. "
+                    "Each message will contain one result. "
+                    "Do NOT generate the article yet; just acknowledge each part.\n\n"
+                    "Important guidance:\n"
+                    "- You can change the number of elements (headings, images, etc.) based on this info, "
+                    "but keep the main structure as described.\n"
+                    "- Use this information to improve relevance, heading structure, and coverage, while ensuring originality. "
+                    "Do not copy text."
+                ),
+            },
+            *[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Top result #{i + 1}:\n{info}\n"
+                        "Acknowledge only. Incorporate this later when generating the article."
+                    ),
+                }
+                for i, info in enumerate(top_results_info)
+            ],
+            {
+                "role": "user",
+                "content": (
+                    "Related internal blog articles for internal linking:\n"
+                    f"{self.related_articles}\n"
+                    "Insert natural descriptive anchor text links to these wherever relevant, but avoid keyword stuffing.\n"
+                    "Acknowledge only."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Categories: {self.categories}\nTags: {self.tags}\nAcknowledge only."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "[FINAL]\n"
+                    "Now generate a 1500-word SEO-optimized article using ALL information above.\n"
+                    "Follow this structure exactly:\n"
+                    "• **Title:** A compelling, SEO-friendly blog post title.\n"
+                    "• **Summary:** A short opening paragraph summarizing the article.\n"
+                    "• **Introduction (~100 words).**\n"
+                    "• **12 main headings** (include the Primary Keyword naturally in the first 100 words).\n"
+                    "• 2–3 subheadings under relevant main headings.\n"
+                    "• Short paragraphs (≤3 lines) in clear, simple language (Flesch-Kincaid Grade 8–9).\n"
+                    "• **Conclusion.**\n\n"
+                    "Image Placeholders:\n"
+                    "Whenever you mention something that could be illustrated visually, insert an HTML placeholder tag like:\n"
+                    "<placeholder-img>short descriptive sentence of the image to search for in english</placeholder-img>\n"
+                    "• The placeholder description MUST include the Primary Keyword (or part of it) in English to ensure relevance.\n\n"
+                    "JSON Output:\n"
+                    "After the HTML content, return a JSON block with:\n"
+                    "• title: the generated SEO title\n"
+                    "• categories: list of relevant categories\n"
+                    "• tags: list of 5 relevant tags\n"
+                    "• faqs: 3 objects with question/answer\n"
+                    "• meta: meta description (≤160 characters containing the Primary Keyword)\n"
+                    "• sources: list of objects with 'title' and 'link' for every source you referenced in the article\n\n"
+                    "Only return valid HTML followed by the JSON block."
+                ),
             },
         ]
-        await self._get_text_response(input=initial_input)
+        for message in messages:
+            await self._get_text_response(
+                input=[{"role": message["role"], "content": message["content"]}],
+            )
         print(self.current_response.output_text)
         json_output, html_output = await separate_json(
             self.current_response.output_text
@@ -124,25 +155,29 @@ class OpenAi:
 
         return json_output, html_output
 
-    async def get_image_response(self, prompt: str) -> str:
-        image_prompt = f"""
-        Generate an image that describes the text below best:\n\n
-        {prompt}
-        """
-
-        result = await self.client.images.generate(
-            model="dall-e-3", prompt=image_prompt, response_format="b64_json"
+    # TODO: still need this to be a part of the process
+    ## right now the function is not used anywhere
+    ## for that we first need to add a part where it passes the article
+    ## to the yoast tool and filters the result for use in here
+    async def improve_article(self, yoast_info) -> tuple[dict, str]:
+        input = [
+            {
+                "role": "user",
+                "content": (
+                    "As you know yoast is a tool for SEO optimization\n"
+                    "This is the result of your article passed into yoast\n"
+                    "Use this information to improve the article\n"
+                    "Give me the article with the exact same structure\n"
+                    f"{yoast_info}\n"
+                ),
+            }
+        ]
+        await self._get_text_response(input)
+        json_output, html_output = await separate_json(
+            self.current_response.output_text
         )
-        print(result)
 
-        if result:
-            image_base64 = result.data[0].b64_json
-            image_bytes = base64.b64decode(image_base64)
-
-            with open("1.png", "wb") as f:
-                f.write(image_bytes)
-
-        return "1.png"
+        return json_output, html_output
 
 
 async def separate_json(text: str) -> tuple[dict, str]:
