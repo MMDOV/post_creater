@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { Paper, assessments, assessors, interpreters } = require("yoastseo");
-const { getResearcher } = require("./get-researcher");
+const { getResearcher } = require("./get-researcher.js");
 
 // Assessors
 const {
@@ -9,10 +9,6 @@ const {
     ContentAssessor,
     RelatedKeywordAssessor,
     InclusiveLanguageAssessor,
-    MetaDescriptionAssessor,
-    SeoTitleAssessor,
-    KeyphraseUseAssessor,
-    KeyphraseAssessor
 } = assessors;
 
 // Premium assessments

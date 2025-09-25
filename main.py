@@ -1,3 +1,4 @@
+import subprocess
 import asyncio
 import json
 import re
@@ -86,7 +87,7 @@ async def main():
             related_articles=[],
         )
 
-        engine = "generate"
+        engine = "google"
         html_file = f"{question}.html"
         json_file = f"{question}.json"
         if not os.path.exists(json_file) or not os.path.exists(html_file):
@@ -126,15 +127,40 @@ async def main():
             cid for cid, name in all_tags.items() if name in picked_tag_names
         ]
 
-        faqs = json_output["faqs"]
-        post_title = json_output["title"]
-        meta = json_output["meta"]
-        sources = json_output["sources"]
+        # faqs = json_output["faqs"]
+        # post_title = json_output["title"]
+        # meta = json_output["meta"]
+        # sources = json_output["sources"]
 
         queries = re.findall(r"<placeholder-img>(.*?)</placeholder-img>", html_output)
         placeholders = re.findall(
             r"<placeholder-img>.*?</placeholder-img>", html_output
         )
+        no_image_html = ""
+        for placeholder in placeholders:
+            no_image_html = html_output.replace(placeholder, "")
+            async with aiofiles.open(
+                f"no_images_{html_file}", "w", encoding="utf-8"
+            ) as f:
+                await f.write(no_image_html)
+
+        input_data = {"text": no_image_html, "locale": "fa"}
+        proc = subprocess.run(
+            ["node", "yoast_seo.js"],
+            input=json.dumps(input_data).encode(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        if proc.returncode != 0:
+            print("Error:", proc.stderr.decode())
+        else:
+            output = json.loads(proc.stdout.decode())
+            for value in output.values():
+                for seo in value:
+                    if seo["rating"] != "good":
+                        print(json.dumps(seo["text"], indent=2, ensure_ascii=False))
+        sys.exit(0)
 
         if queries:
             print("engine:", engine)
