@@ -5,6 +5,7 @@ import re
 import aiohttp
 import aiofiles
 from aibot import OpenAi
+from yoast import Yoast
 from wordpress import WordPress
 from scrape import Scrape
 import pandas as pd
@@ -144,22 +145,10 @@ async def main():
             ) as f:
                 await f.write(no_image_html)
 
-        input_data = {"text": no_image_html, "locale": "fa"}
-        proc = subprocess.run(
-            ["node", "yoast_seo.js"],
-            input=json.dumps(input_data).encode(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        analyzer = Yoast(filters=["inclusiveLanguage", "images"])
+        analyzer.analyze(no_image_html)
+        print(analyzer.get_texts())
 
-        if proc.returncode != 0:
-            print("Error:", proc.stderr.decode())
-        else:
-            output = json.loads(proc.stdout.decode())
-            for value in output.values():
-                for seo in value:
-                    if seo["rating"] != "good":
-                        print(json.dumps(seo["text"], indent=2, ensure_ascii=False))
         sys.exit(0)
 
         if queries:
