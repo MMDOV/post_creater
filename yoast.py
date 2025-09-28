@@ -10,6 +10,7 @@ class Yoast:
         self._analysis = []
 
     def analyze(self, text: str, locale: str = "fa"):
+        self._analysis = []
         input_data = {"text": text, "locale": locale}
         proc = subprocess.run(
             ["node", "yoast_seo.js"],
@@ -23,7 +24,7 @@ class Yoast:
         else:
             output = json.loads(proc.stdout.decode())
             for key, value in output.items():
-                if key not in self.filters:
+                if key != "inclusiveLanguage":
                     for seo in value:
                         if (
                             seo["rating"] != "good"
@@ -31,14 +32,7 @@ class Yoast:
                         ):
                             self._analysis.append(seo)
 
-    def get_full_analysis(self):
-        return self._analysis
-
-    def get_ratings(self):
-        return [item.get("rating") for item in self._analysis]
-
-    def get_texts(self):
-        return [item.get("text") for item in self._analysis]
-
-    def get_scores(self):
-        return [item.get("score") for item in self._analysis]
+    def get_analysis(
+        self, keys: list[str] = ["_identifier", "text", "score", "rating"]
+    ):
+        return [{key: item.get(key) for key in keys} for item in self._analysis]

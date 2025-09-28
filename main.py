@@ -128,8 +128,8 @@ async def main():
             cid for cid, name in all_tags.items() if name in picked_tag_names
         ]
 
-        # faqs = json_output["faqs"]
-        # post_title = json_output["title"]
+        faqs = json_output["faqs"]
+        post_title = json_output["title"]
         # meta = json_output["meta"]
         # sources = json_output["sources"]
 
@@ -145,9 +145,28 @@ async def main():
             ) as f:
                 await f.write(no_image_html)
 
-        analyzer = Yoast(filters=["inclusiveLanguage", "images"])
-        analyzer.analyze(no_image_html)
-        print(analyzer.get_texts())
+        # TODO: figure out how we are going to use this.
+        ## probably need to write a function that adds a lot of the post manualy
+        ## so we can analyze it and edit it
+        ## only after that we can go work on the filters
+
+        analyzer = Yoast(
+            filters=[
+                "images",
+                "metaDescriptionKeyword",
+                "metaDescriptionLength",
+                "keyphraseInSEOTitle",
+                "introductionKeyword",
+            ]
+        )
+        analyzer.analyze(f"<h1>{post_title}</h1>" + no_image_html)
+        print(
+            json.dumps(
+                analyzer.get_analysis(keys=["_identifier", "text"]),
+                indent=4,
+                ensure_ascii=False,
+            )
+        )
 
         sys.exit(0)
 

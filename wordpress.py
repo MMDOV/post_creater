@@ -45,6 +45,60 @@ class WordPress:
                         "Upload succeeded but no JSON and no location header"
                     )
 
+    def _build_post_payload(
+        self,
+        title: str,
+        content: str,
+        meta: str,
+        faqs: list[dict],
+        article_sources: list[dict] = [],
+        categories: list = [],
+        tags: list = [],
+        status: str = "draft",
+    ) -> dict:
+        """Return a dict ready for either create_post or yoast-preview render."""
+
+        meta_block = f'<meta name="description" content="{meta}" />'
+
+        faq_items = (
+            {
+                f"item-{i}": {
+                    "faq_question": str(faq.get("question")),
+                    "faq_answer": str(faq.get("answer")),
+                }
+                for i, faq in enumerate(faqs)
+            }
+            if faqs
+            else {}
+        )
+
+        sources = (
+            (
+                "<ul>"
+                + "".join(
+                    f'<li><a href="{src["link"]}">{src["title"]}</a></li>'
+                    for src in article_sources
+                )
+                + "</ul>"
+            )
+            if article_sources
+            else ""
+        )
+
+        payload = {
+            "title": title,
+            "content": content + "\n\n" + meta_block,
+            "meta": {
+                "faq_items_v2": faq_items,
+                "article_sources": sources,
+            },
+            "categories": categories,
+            "tags": tags,
+        }
+        if status is not None:
+            payload["status"] = status
+        return payload
+
     # TODO: test and see if metadescription works
     async def create_post(
         self,
@@ -55,42 +109,12 @@ class WordPress:
         article_sources: list[dict] = [],
         categories: list = [],
         tags: list = [],
+        status: str = "draft",
     ):
-        meta_block = f'<meta name="description" content="{meta}" />'
-        if faqs:
-            faq_items = {
-                f"item-{i}": {
-                    "faq_question": str(faq.get("question")),
-                    "faq_answer": str(faq.get("answer")),
-                }
-                for i, faq in enumerate(faqs)
-            }
-        else:
-            faq_items = {}
-        if article_sources:
-            sources = (
-                "<ul>"
-                + "".join(
-                    f'<li><a href="{source["link"]}">{source["title"]}</a></li>'
-                    for source in article_sources
-                )
-                + "</ul>"
-            )
-        else:
-            sources = ""
-        post_data = {
-            "title": title,
-            "content": content + "\n\n" + meta_block,
-            "status": "draft",
-            "meta": {
-                "faq_items_v2": faq_items,
-                "article_sources": sources,
-            },
-            "categories": categories,
-            "tags": tags,
-        }
-
-        url = f"{self.site_url}/wp-json/wp/v2/posts"
+        post_data = self._build_post_payload(
+            title, content, meta, faqs, article_sources, categories, tags, status
+        )
+        url = f"{self.site_url}wp-json/wp/v2/posts"
         async with aiohttp.ClientSession(
             auth=aiohttp.BasicAuth(self.username, self.password)
         ) as session:
@@ -101,6 +125,7 @@ class WordPress:
                     )
                 result = await resp.json()
                 print("Post created:", result["link"])
+                return result["id"]
 
     async def get_categories(self):
         params = {"per_page": 100}
