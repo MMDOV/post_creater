@@ -1,7 +1,6 @@
-from openai import AsyncOpenAI, responses
+from openai import AsyncOpenAI
 import re
 import json
-import base64
 
 
 class OpenAi:
@@ -155,11 +154,7 @@ class OpenAi:
 
         return json_output, html_output
 
-    # TODO: still need this to be a part of the process
-    ## right now the function is not used anywhere
-    ## for that we first need to add a part where it passes the article
-    ## to the yoast tool and filters the result for use in here
-    async def improve_article(self, yoast_info) -> tuple[dict, str]:
+    async def improve_article(self, yoast_info: list[dict]) -> tuple[dict, str]:
         input = [
             {
                 "role": "user",

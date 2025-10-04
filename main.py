@@ -1,4 +1,3 @@
-import subprocess
 import asyncio
 import json
 import re
@@ -130,45 +129,39 @@ async def main():
 
         faqs = json_output["faqs"]
         post_title = json_output["title"]
-        # meta = json_output["meta"]
-        # sources = json_output["sources"]
+        meta = json_output["meta"]
+        sources = json_output["sources"]
 
         queries = re.findall(r"<placeholder-img>(.*?)</placeholder-img>", html_output)
         placeholders = re.findall(
             r"<placeholder-img>.*?</placeholder-img>", html_output
         )
-        no_image_html = ""
-        for placeholder in placeholders:
-            no_image_html = html_output.replace(placeholder, "")
-            async with aiofiles.open(
-                f"no_images_{html_file}", "w", encoding="utf-8"
-            ) as f:
-                await f.write(no_image_html)
-
-        # TODO: figure out how we are going to use this.
-        ## probably need to write a function that adds a lot of the post manualy
-        ## so we can analyze it and edit it
-        ## only after that we can go work on the filters
 
         analyzer = Yoast(
             filters=[
                 "images",
-                "metaDescriptionKeyword",
-                "metaDescriptionLength",
+                "imageKeyphrase",
+                "titleWidth",
+                "textTitleAssessment",
+                "slugKeyword",
                 "keyphraseInSEOTitle",
-                "introductionKeyword",
+                "metaDescriptionLength",
+                "metaDescriptionKeyword",
             ]
         )
-        analyzer.analyze(f"<h1>{post_title}</h1>" + no_image_html)
-        print(
-            json.dumps(
-                analyzer.get_analysis(keys=["_identifier", "text"]),
-                indent=4,
-                ensure_ascii=False,
-            )
-        )
+        analysys = [1, 2]
 
-        sys.exit(0)
+        while len(analysys) >= 1:
+            no_image_html = ""
+            for placeholder in placeholders:
+                no_image_html = html_output.replace(placeholder, "")
+                async with aiofiles.open(
+                    f"no_images_{html_file}", "w", encoding="utf-8"
+                ) as f:
+                    await f.write(no_image_html)
+            analyzer.analyze(no_image_html, locale="fa")
+            analysys = analyzer.get_analysis()
+            json_output, html_output = await client.improve_article(yoast_info=analysys)
 
         if queries:
             print("engine:", engine)

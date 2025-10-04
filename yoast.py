@@ -1,10 +1,10 @@
 import subprocess
 import json
+import html
+from typing import Optional, Dict
 
 
 class Yoast:
-    # TODO: Add more filters
-    # TODO: figure out a better layout for this class.
     def __init__(self, filters):
         self.filters = filters
         self._analysis = []
