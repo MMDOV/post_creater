@@ -64,7 +64,6 @@ async def main():
 
     try:
         file = pd.read_csv(CSV_FILE_PATH, nrows=1)
-        # question = str(file["text"][0])
         question = "سرما خوردگی"
 
         wordpress = WordPress(
@@ -87,6 +86,7 @@ async def main():
             related_articles=[],
         )
 
+        # TODO: clean this up more to the point of nothing but class and/or function calls being here
         engine = "google"
         html_file = f"{question}.html"
         json_file = f"{question}.json"
@@ -118,20 +118,9 @@ async def main():
             ) as f:
                 html_output = await f.read()
 
-        picked_category_names = json_output["categories"]
-        picked_category_ids = [
-            cid for cid, name in all_categories.items() if name in picked_category_names
-        ]
-        picked_tag_names = json_output["tags"]
-        picked_tag_ids = [
-            cid for cid, name in all_tags.items() if name in picked_tag_names
-        ]
-
-        faqs = json_output["faqs"]
-        post_title = json_output["title"]
-        meta = json_output["meta"]
-        sources = json_output["sources"]
-
+        picked_category_ids, picked_tag_ids, faqs, post_title, meta, sources = (
+            separate_json_data(json_output, all_tags, all_categories)
+        )
         queries = re.findall(r"<placeholder-img>(.*?)</placeholder-img>", html_output)
         placeholders = re.findall(
             r"<placeholder-img>.*?</placeholder-img>", html_output
@@ -161,7 +150,24 @@ async def main():
                     await f.write(no_image_html)
             analyzer.analyze(no_image_html, locale="fa")
             analysys = analyzer.get_analysis()
+            # this part is for testing
+            # ++++++++++++++++++++++++
+            print([item.get("_identifier") for item in analysys])
+            print(len(analysys))
+            user_input = str(input("would you like to improve? (y/n)")).lower()
+            if user_input != "y":
+                break
+            # ++++++++++++++++++++++++
             json_output, html_output = await client.improve_article(yoast_info=analysys)
+
+            picked_category_ids, picked_tag_ids, faqs, post_title, meta, sources = (
+                separate_json_data(json_output, all_tags, all_categories)
+            )
+            async with aiofiles.open(json_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(json_output, indent=2, ensure_ascii=False))
+
+            async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
+                await f.write(html_output)
 
         if queries:
             print("engine:", engine)
@@ -212,9 +218,6 @@ async def main():
             categories=picked_category_ids,
             tags=picked_tag_ids,
         )
-        # df = pd.read_csv(CSV_FILE_PATH)
-        # df = df.drop(index=0)
-        # df.to_csv(CSV_FILE_PATH, index=False)
     except KeyError:
         logging.error("File out of words", exc_info=True)
     except FileNotFoundError:
@@ -232,6 +235,22 @@ async def download_image(session, url: str, filename: str):
                 await f.write(img_data)
 
     return filename
+
+
+def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> tuple:
+    picked_category_names = json["categories"]
+    picked_category_ids = [
+        cid for cid, name in all_categories.items() if name in picked_category_names
+    ]
+    picked_tag_names = json["tags"]
+    picked_tag_ids = [cid for cid, name in all_tags.items() if name in picked_tag_names]
+
+    faqs = json["faqs"]
+    post_title = json["title"]
+    meta = json["meta"]
+    sources = json["sources"]
+
+    return picked_category_ids, picked_tag_ids, faqs, post_title, meta, sources
 
 
 if __name__ == "__main__":
