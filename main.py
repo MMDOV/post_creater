@@ -152,7 +152,8 @@ async def main():
             analysys = analyzer.get_analysis()
             # this part is for testing
             # ++++++++++++++++++++++++
-            print([item.get("_identifier") for item in analysys])
+            print(no_image_html)
+            print(analyzer.get_analysis(["text", "_identifier"]))
             print(len(analysys))
             user_input = str(input("would you like to improve? (y/n)")).lower()
             if user_input != "y":

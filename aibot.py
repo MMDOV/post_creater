@@ -1,6 +1,11 @@
 from openai import AsyncOpenAI
 import re
 import json
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 
 class OpenAi:
@@ -19,13 +24,16 @@ class OpenAi:
         self.related_articles = related_articles
         self.conversation_id = None
 
+    # FIX: conversation is needs to be saved between runs
     async def _initialize_conversation(self) -> None:
         if not self.conversation_id:
             conversation = await self.client.conversations.create()
             self.conversation_id = conversation.id
 
+    @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
     async def _get_text_response(self, input):
         await self._initialize_conversation()
+        print("getting text responsse")
         self.current_response = await self.client.responses.create(
             model="gpt-5",
             reasoning={"effort": "medium"},
@@ -37,7 +45,6 @@ class OpenAi:
     async def get_full_response(self, top_results_info: list[dict]) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
 
-        print("getting text responsse")
         print("keyword:", self.keyword)
 
         messages = [
@@ -143,12 +150,13 @@ class OpenAi:
                 ),
             },
         ]
-        for message in messages:
+        for i, message in enumerate(messages):
+            print(f"Message {i}")
             await self._get_text_response(
                 input=[{"role": message["role"], "content": message["content"]}],
             )
         print(self.current_response.output_text)
-        json_output, html_output = await separate_json(
+        json_output, html_output = await self.separate_json(
             self.current_response.output_text
         )
 
@@ -168,24 +176,128 @@ class OpenAi:
             }
         ]
         await self._get_text_response(input)
-        json_output, html_output = await separate_json(
-            self.current_response.output_text
+        json_output, html_output = await self.separate_json(
+            text=self.current_response.output_text
         )
+        return json_output, html_output
 
+    async def separate_json(self, text: str, max_fixes: int = 3) -> tuple[dict, str]:
+        print("trying to separate")
+
+        for attempt in range(1, max_fixes + 1):
+            match = re.search(r"\{[\s\S]*\}", text)
+            if match:
+                json_text = match.group()
+                html_output = text[: match.start()].strip()
+                try:
+                    json_output = json.loads(json_text)
+                except json.JSONDecodeError:
+                    json_output = {}
+            else:
+                html_output = text.strip()
+                json_output = {}
+
+            issues = validate_post_json(json_output)
+            if not issues:
+                print(f"JSON validated successfully after {attempt} attempt(s)")
+                return json_output, html_output
+
+            print(f"Attempt {attempt}: JSON has issues -> {issues}")
+
+            missing_keys = ", ".join(issues)
+            fix_message = (
+                f"The JSON you provided is missing or invalid in the following fields: {missing_keys}.\n"
+                "Please fix it and return the full HTML and JSON again, in the same format as before.\n"
+                "Reminder: JSON format should include keys: title, categories, tags, faqs, meta, and sources."
+            )
+
+            try:
+                await self._get_text_response(
+                    [{"role": "user", "content": fix_message}]
+                )
+                text = self.current_response.output_text
+            except Exception as e:
+                print("Error while requesting fix:", e)
+                break
+        match = re.search(r"\{[\s\S]*\}", text)
+        if match:
+            json_text = match.group()
+            html_output = text[: match.start()].strip()
+            try:
+                json_output = json.loads(json_text)
+            except json.JSONDecodeError:
+                json_output = {}
+        else:
+            html_output = text.strip()
+            json_output = {}
+        required_structure = {
+            "title": "",
+            "categories": [],
+            "tags": [],
+            "faqs": [{"question": "", "answer": ""}],
+            "meta": "",
+            "sources": [{"title": "", "link": ""}],
+        }
+        for key, value in required_structure.items():
+            if key not in json_output:
+                json_output[key] = value
+        print("Could not get a valid JSON after several attempts.")
         return json_output, html_output
 
 
-async def separate_json(text: str) -> tuple[dict, str]:
-    print("trying to seperate")
-    match = re.search(r"\{[\s\S]*\}", text)
-    if match:
-        json_text = match.group()
-        try:
-            json_output = json.loads(json_text)
-        except json.JSONDecodeError:
-            json_output = {"categories": [], "tags": []}
-        html_output = text[: match.start()].strip()
+def validate_post_json(data: dict):
+    issues = []
+
+    # expected top-level structure
+    schema = {
+        "title": str,
+        "categories": list,
+        "tags": list,
+        "faqs": list,
+        "meta": str,
+        "sources": list,
+    }
+
+    # check top-level keys and types
+    for key, expected_type in schema.items():
+        if key not in data:
+            issues.append(f"Missing key: {key}")
+            continue
+        if not isinstance(data[key], expected_type):
+            issues.append(
+                f"Invalid type for '{key}': expected {expected_type.__name__}, got {type(data[key]).__name__}"
+            )
+
+    # check FAQs
+    if isinstance(data.get("faqs"), list):
+        for i, faq in enumerate(data["faqs"], start=1):
+            if not isinstance(faq, dict):
+                issues.append(f"faqs[{i}] is not an object")
+                continue
+            for subkey in ("question", "answer"):
+                if subkey not in faq:
+                    issues.append(f"Missing key in faqs[{i}]: {subkey}")
+                elif not isinstance(faq[subkey], str):
+                    issues.append(
+                        f"Invalid type in faqs[{i}]['{subkey}']: expected str"
+                    )
     else:
-        json_output = {"categories": [], "tags": []}
-        html_output = text.strip()
-    return json_output, html_output
+        issues.append("faqs must be a list")
+
+    # check sources
+    if isinstance(data.get("sources"), list):
+        for i, src in enumerate(data["sources"], start=1):
+            if not isinstance(src, dict):
+                issues.append(f"sources[{i}] is not an object")
+                continue
+            for subkey in ("title", "link"):
+                if subkey not in src:
+                    issues.append(f"Missing key in sources[{i}]: {subkey}")
+                elif not isinstance(src[subkey], str):
+                    issues.append(
+                        f"Invalid type in sources[{i}]['{subkey}']: expected str"
+                    )
+    else:
+        issues.append("sources must be a list")
+
+    return issues
