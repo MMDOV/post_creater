@@ -16,13 +16,14 @@ class OpenAi:
         categories: list[str],
         tags: list[str],
         related_articles: list[dict],
+        conversation_id: str | None,
     ) -> None:
         self.client = AsyncOpenAI(api_key=openai_api_key)
         self.keyword = keyword
         self.categories = categories
         self.tags = tags
         self.related_articles = related_articles
-        self.conversation_id = None
+        self.conversation_id = conversation_id
 
     # FIX: conversation is needs to be saved between runs
     async def _initialize_conversation(self) -> None:
@@ -183,6 +184,8 @@ class OpenAi:
 
     async def separate_json(self, text: str, max_fixes: int = 3) -> tuple[dict, str]:
         print("trying to separate")
+        # Store conversation_id before any processing
+        conversation_id = self.conversation_id
 
         for attempt in range(1, max_fixes + 1):
             match = re.search(r"\{[\s\S]*\}", text)
@@ -197,13 +200,15 @@ class OpenAi:
                 html_output = text.strip()
                 json_output = {}
 
+            # Add conversation_id to json_output
+            json_output["conversation_id"] = conversation_id
+
             issues = validate_post_json(json_output)
             if not issues:
                 print(f"JSON validated successfully after {attempt} attempt(s)")
                 return json_output, html_output
 
             print(f"Attempt {attempt}: JSON has issues -> {issues}")
-
             missing_keys = ", ".join(issues)
             fix_message = (
                 f"The JSON you provided is missing or invalid in the following fields: {missing_keys}.\n"
@@ -219,6 +224,7 @@ class OpenAi:
             except Exception as e:
                 print("Error while requesting fix:", e)
                 break
+        # Final attempt processing
         match = re.search(r"\{[\s\S]*\}", text)
         if match:
             json_text = match.group()
@@ -230,6 +236,10 @@ class OpenAi:
         else:
             html_output = text.strip()
             json_output = {}
+        # Add conversation_id to the final json_output
+        json_output["conversation_id"] = conversation_id
+
+        # Fill in missing structure
         required_structure = {
             "title": "",
             "categories": [],

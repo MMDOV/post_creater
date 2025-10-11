@@ -78,13 +78,6 @@ async def main():
             pixabay_api_key=pixabay_api,
             pexels_api_key=pexels_api,
         )
-        client = OpenAi(
-            openai_api_key=api_key,
-            keyword=question,
-            categories=[],
-            tags=[],
-            related_articles=[],
-        )
 
         # TODO: clean this up more to the point of nothing but class and/or function calls being here
         engine = "google"
@@ -96,6 +89,15 @@ async def main():
                 top_results_info = await scraper.get_top_results_info(query=question)
             except Exception:
                 top_results_info = []
+
+            client = OpenAi(
+                openai_api_key=api_key,
+                keyword=question,
+                categories=[],
+                tags=[],
+                related_articles=[],
+                conversation_id=None,
+            )
             json_output, html_output = await client.get_full_response(
                 top_results_info=top_results_info
             )
@@ -118,8 +120,23 @@ async def main():
             ) as f:
                 html_output = await f.read()
 
-        picked_category_ids, picked_tag_ids, faqs, post_title, meta, sources = (
-            separate_json_data(json_output, all_tags, all_categories)
+        (
+            picked_category_ids,
+            picked_tag_ids,
+            faqs,
+            post_title,
+            meta,
+            sources,
+            conversation_id,
+        ) = separate_json_data(json_output, all_tags, all_categories)
+
+        client = OpenAi(
+            openai_api_key=api_key,
+            keyword=question,
+            categories=[],
+            tags=[],
+            related_articles=[],
+            conversation_id=conversation_id,
         )
         queries = re.findall(r"<placeholder-img>(.*?)</placeholder-img>", html_output)
         placeholders = re.findall(
@@ -250,8 +267,17 @@ def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> tupl
     post_title = json["title"]
     meta = json["meta"]
     sources = json["sources"]
+    conversation_id = json["conversation_id"]
 
-    return picked_category_ids, picked_tag_ids, faqs, post_title, meta, sources
+    return (
+        picked_category_ids,
+        picked_tag_ids,
+        faqs,
+        post_title,
+        meta,
+        sources,
+        conversation_id,
+    )
 
 
 if __name__ == "__main__":
