@@ -120,6 +120,7 @@ async def main():
             ) as f:
                 html_output = await f.read()
 
+        print(json.dumps(json_output, indent=2, ensure_ascii=False))
         (
             picked_category_ids,
             picked_tag_ids,
@@ -153,6 +154,7 @@ async def main():
                 "keyphraseInSEOTitle",
                 "metaDescriptionLength",
                 "metaDescriptionKeyword",
+                "internalLinks",
             ]
         )
         analysys = [1, 2]
@@ -165,7 +167,9 @@ async def main():
                     f"no_images_{html_file}", "w", encoding="utf-8"
                 ) as f:
                     await f.write(no_image_html)
-            analyzer.analyze(no_image_html, locale="fa")
+            analyzer.analyze(
+                keyword=question, title=post_title, text=no_image_html, locale="fa"
+            )
             analysys = analyzer.get_analysis()
             # this part is for testing
             # ++++++++++++++++++++++++
@@ -178,9 +182,16 @@ async def main():
             # ++++++++++++++++++++++++
             json_output, html_output = await client.improve_article(yoast_info=analysys)
 
-            picked_category_ids, picked_tag_ids, faqs, post_title, meta, sources = (
-                separate_json_data(json_output, all_tags, all_categories)
-            )
+            print(json.dumps(json_output, indent=2, ensure_ascii=False))
+            (
+                picked_category_ids,
+                picked_tag_ids,
+                faqs,
+                post_title,
+                meta,
+                sources,
+                conversation_id,
+            ) = separate_json_data(json_output, all_tags, all_categories)
             async with aiofiles.open(json_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(json_output, indent=2, ensure_ascii=False))
 

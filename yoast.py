@@ -9,9 +9,14 @@ class Yoast:
         self.filters = filters
         self._analysis = []
 
-    def analyze(self, text: str, locale: str = "fa"):
+    def analyze(self, keyword: str, title: str, text: str, locale: str = "fa"):
         self._analysis = []
-        input_data = {"text": text, "locale": locale}
+        input_data = {
+            "keyword": keyword,
+            "title": title,
+            "text": text,
+            "locale": locale,
+        }
         proc = subprocess.run(
             ["node", "yoast_seo.js"],
             input=json.dumps(input_data).encode(),
