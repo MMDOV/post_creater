@@ -1,4 +1,6 @@
 import asyncio
+from dataclasses import dataclass
+from typing import List, Dict
 import json
 import re
 import aiohttp
@@ -121,16 +123,16 @@ async def main():
                 html_output = await f.read()
 
         print(json.dumps(json_output, indent=2, ensure_ascii=False))
-        (
-            picked_category_ids,
-            picked_tag_ids,
-            faqs,
-            post_title,
-            meta,
-            sources,
-            conversation_id,
-        ) = separate_json_data(json_output, all_tags, all_categories)
+        data = separate_json_data(json_output, all_tags, all_categories)
 
+        picked_category_ids = data.picked_category_ids
+        picked_tag_ids = data.picked_tag_ids
+        faqs = data.faqs
+        post_title = data.post_title
+        meta = data.meta
+        slug = data.slug
+        sources = data.sources
+        conversation_id = data.conversation_id
         client = OpenAi(
             openai_api_key=api_key,
             keyword=question,
@@ -148,12 +150,7 @@ async def main():
             filters=[
                 "images",
                 "imageKeyphrase",
-                "titleWidth",
-                "textTitleAssessment",
                 "slugKeyword",
-                "keyphraseInSEOTitle",
-                "metaDescriptionLength",
-                "metaDescriptionKeyword",
                 "internalLinks",
             ]
         )
@@ -168,7 +165,12 @@ async def main():
                 ) as f:
                     await f.write(no_image_html)
             analyzer.analyze(
-                keyword=question, title=post_title, text=no_image_html, locale="fa"
+                keyword=question,
+                title=post_title,
+                meta=meta,
+                slug=slug,
+                text=no_image_html,
+                locale="fa",
             )
             analysys = analyzer.get_analysis()
             # this part is for testing
@@ -180,18 +182,20 @@ async def main():
             if user_input != "y":
                 break
             # ++++++++++++++++++++++++
-            json_output, html_output = await client.improve_article(yoast_info=analysys)
+            json_output, html_output = await client.improve_article(
+                title=post_title, yoast_info=analysys
+            )
 
             print(json.dumps(json_output, indent=2, ensure_ascii=False))
-            (
-                picked_category_ids,
-                picked_tag_ids,
-                faqs,
-                post_title,
-                meta,
-                sources,
-                conversation_id,
-            ) = separate_json_data(json_output, all_tags, all_categories)
+            data = separate_json_data(json_output, all_tags, all_categories)
+
+            picked_category_ids = data.picked_category_ids
+            picked_tag_ids = data.picked_tag_ids
+            faqs = data.faqs
+            post_title = data.post_title
+            meta = data.meta
+            sources = data.sources
+            conversation_id = data.conversation_id
             async with aiofiles.open(json_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(json_output, indent=2, ensure_ascii=False))
 
@@ -266,28 +270,36 @@ async def download_image(session, url: str, filename: str):
     return filename
 
 
-def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> tuple:
+@dataclass
+class JsonData:
+    picked_category_ids: List[int]
+    picked_tag_ids: List[int]
+    faqs: List[Dict[str, str]]
+    post_title: str
+    meta: str
+    slug: str
+    sources: List[Dict[str, str]]
+    conversation_id: str
+
+
+def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> JsonData:
     picked_category_names = json["categories"]
     picked_category_ids = [
         cid for cid, name in all_categories.items() if name in picked_category_names
     ]
+
     picked_tag_names = json["tags"]
     picked_tag_ids = [cid for cid, name in all_tags.items() if name in picked_tag_names]
 
-    faqs = json["faqs"]
-    post_title = json["title"]
-    meta = json["meta"]
-    sources = json["sources"]
-    conversation_id = json["conversation_id"]
-
-    return (
-        picked_category_ids,
-        picked_tag_ids,
-        faqs,
-        post_title,
-        meta,
-        sources,
-        conversation_id,
+    return JsonData(
+        picked_category_ids=picked_category_ids,
+        picked_tag_ids=picked_tag_ids,
+        faqs=json["faqs"],
+        post_title=json["title"],
+        meta=json["meta"],
+        slug=json["slug"],
+        sources=json["sources"],
+        conversation_id=json["conversation_id"],
     )
 
 

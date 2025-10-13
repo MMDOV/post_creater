@@ -9,11 +9,21 @@ class Yoast:
         self.filters = filters
         self._analysis = []
 
-    def analyze(self, keyword: str, title: str, text: str, locale: str = "fa"):
+    def analyze(
+        self,
+        keyword: str,
+        title: str,
+        meta: str,
+        slug: str,
+        text: str,
+        locale: str = "fa",
+    ):
         self._analysis = []
         input_data = {
             "keyword": keyword,
             "title": title,
+            "metaDescription": meta,
+            "slug": slug,
             "text": text,
             "locale": locale,
         }

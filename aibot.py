@@ -45,6 +45,7 @@ class OpenAi:
 
     async def get_full_response(self, top_results_info: list[dict]) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
+        # TODO: needs to generate slug too
 
         print("keyword:", self.keyword)
 
@@ -163,23 +164,52 @@ class OpenAi:
 
         return json_output, html_output
 
-    async def improve_article(self, yoast_info: list[dict]) -> tuple[dict, str]:
-        input = [
+    async def improve_article(
+        self, title: str, yoast_info: list[dict]
+    ) -> tuple[dict, str]:
+        input_prompt = [
             {
                 "role": "user",
                 "content": (
-                    "As you know yoast is a tool for SEO optimization\n"
-                    "This is the result of your article passed into yoast\n"
-                    "Use this information to improve the article\n"
-                    "Give me the article with the exact same structure\n"
-                    f"{yoast_info}\n"
+                    "You are an SEO assistant. Below is the result of a Yoast SEO analysis "
+                    "for your previously written article. Your job is to revise the article "
+                    "to fix ONLY the issues listed in the analysis, keeping the same tone, "
+                    "topic, and overall structure.\n\n"
+                    "Yoast analysis:\n"
+                    f"{yoast_info}\n\n"
+                    "Article details:\n"
+                    f"Title: {title}\n"
+                    f"Primary Keyword/Keyphrase: {self.keyword}\n\n"
+                    "Here is the full article you previously wrote:\n"
+                    f"{self.current_response.output_text}\n\n"
+                    "Instructions:\n"
+                    "- Read the Yoast feedback carefully and address every issue listed.\n"
+                    "- Keep paragraph and heading structure unless a fix requires otherwise.\n"
+                    "- Do NOT change the tone, meaning, or topic.\n"
+                    "- Only modify text where necessary to fix Yoast issues.\n\n"
+                    "Output format (must match the initial generation format):\n"
+                    "• Return the improved article as clean HTML only—NO <html>, <head>, or <body> tags.\n"
+                    "• Wrap the entire content in a single <div lang='fa' dir='rtl'>.\n"
+                    "• Use only clean structural tags (<h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.).\n"
+                    "• Do NOT add inline styles, CSS classes, or custom attributes.\n"
+                    "• After the HTML, append a JSON block containing:\n"
+                    '   - "title": improved SEO title (if relevant)\n'
+                    '   - "categories": [list of relevant categories]\n'
+                    '   - "tags": [list of 5 relevant tags]\n'
+                    '   - "faqs": [3 objects {"question","answer"}]\n'
+                    '   - "meta": meta description (≤160 characters, must include the Primary Keyword)\n'
+                    '   - "sources": list of objects with "title" and "link" for every source referenced in the article\n\n'
+                    "Ensure the format is identical to the one used in the original generation step so it can be parsed correctly."
                 ),
             }
         ]
-        await self._get_text_response(input)
+
+        await self._get_text_response(input_prompt)
+
         json_output, html_output = await self.separate_json(
             text=self.current_response.output_text
         )
+
         return json_output, html_output
 
     async def separate_json(self, text: str, max_fixes: int = 3) -> tuple[dict, str]:
