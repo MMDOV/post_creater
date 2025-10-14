@@ -71,6 +71,7 @@ class OpenAi:
                     "• Verify all information and ensure it is up-to-date and correct.\n"
                     "• After the HTML, append a JSON block containing:\n"
                     '   - "title": generated SEO title\n'
+                    '   - "slug": an SEO-friendly English slug to be used as the URL (avoid Persian characters)\n'
                     '   - "categories": [list of relevant categories]\n'
                     '   - "tags": [list of 5 relevant tags]\n'
                     '   - "faqs": [3 objects {"question","answer"}]\n'
@@ -143,6 +144,7 @@ class OpenAi:
                     "JSON Output:\n"
                     "After the HTML content, return a JSON block with:\n"
                     "• title: the generated SEO title\n"
+                    "• slug: an SEO-friendly English slug to be used as the URL (avoid Persian characters)\n"
                     "• categories: list of relevant categories\n"
                     "• tags: list of 5 relevant tags\n"
                     "• faqs: 3 objects with question/answer\n"
@@ -243,7 +245,7 @@ class OpenAi:
             fix_message = (
                 f"The JSON you provided is missing or invalid in the following fields: {missing_keys}.\n"
                 "Please fix it and return the full HTML and JSON again, in the same format as before.\n"
-                "Reminder: JSON format should include keys: title, categories, tags, faqs, meta, and sources."
+                "Reminder: JSON format should include keys: title, slug, categories, tags, faqs, meta, and sources."
             )
 
             try:
@@ -272,6 +274,7 @@ class OpenAi:
         # Fill in missing structure
         required_structure = {
             "title": "",
+            "slug": "",
             "categories": [],
             "tags": [],
             "faqs": [{"question": "", "answer": ""}],
@@ -291,6 +294,7 @@ def validate_post_json(data: dict):
     # expected top-level structure
     schema = {
         "title": str,
+        "slug": str,
         "categories": list,
         "tags": list,
         "faqs": list,

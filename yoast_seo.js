@@ -55,7 +55,13 @@ async function main() {
     const relatedKeywordAssessor = new RelatedKeywordAssessor(researcher);
     const inclusiveLanguageAssessor = new InclusiveLanguageAssessor(researcher);
 
-    const paper = new Paper(body.text || "", body);
+    const paper = new Paper(body.text || "", {
+        keyword: body.keyword || "",
+        title: body.title || "",
+        description: body.metaDescription || "",
+        slug: body.slug || "",
+        locale: body.locale || "en",
+    });
 
     // Run assessments
     seoAssessor.assess(paper);

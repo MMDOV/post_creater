@@ -176,7 +176,13 @@ async def main():
             # this part is for testing
             # ++++++++++++++++++++++++
             print(no_image_html)
-            print(analyzer.get_analysis(["text", "_identifier"]))
+            print(
+                json.dumps(
+                    analyzer.get_analysis(["_identifier", "text"]),
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
             print(len(analysys))
             user_input = str(input("would you like to improve? (y/n)")).lower()
             if user_input != "y":
