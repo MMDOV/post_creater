@@ -2,6 +2,7 @@
 
 const { Paper, assessments, assessors, interpreters } = require("yoastseo");
 const { getResearcher } = require("./get-researcher.js");
+const { createCanvas } = require("canvas");
 
 // Assessors
 const {
@@ -22,6 +23,13 @@ const resultToVM = (result) => {
     const { _identifier, score, text, marks, editFieldName } = result;
     return { _identifier, score, text, marks, editFieldName, rating: interpreters.scoreToRating(score) };
 };
+
+function measureTextWidth(text, font = "13px sans-serif") {
+    const canvas = createCanvas("canvas");
+    const ctx = canvas.getContext("2d");
+    ctx.font = font;
+    return ctx.measureText(text).width;
+}
 
 // Main function
 async function main() {
@@ -58,6 +66,8 @@ async function main() {
     const paper = new Paper(body.text || "", {
         keyword: body.keyword || "",
         title: body.title || "",
+        textTitle: body.title || "",
+        titleWidth: measureTextWidth(body.title) || 0,
         description: body.metaDescription || "",
         slug: body.slug || "",
         locale: body.locale || "en",
