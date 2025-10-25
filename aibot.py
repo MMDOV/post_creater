@@ -25,7 +25,6 @@ class OpenAi:
         self.related_articles = related_articles
         self.conversation_id = conversation_id
 
-    # FIX: conversation is needs to be saved between runs
     async def _initialize_conversation(self) -> None:
         if not self.conversation_id:
             conversation = await self.client.conversations.create()
@@ -45,7 +44,6 @@ class OpenAi:
 
     async def get_full_response(self, top_results_info: list[dict]) -> tuple[dict, str]:
         # TODO: still need to figure out how are we adding the pillar page
-        # TODO: needs to generate slug too
 
         print("keyword:", self.keyword)
 

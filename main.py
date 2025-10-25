@@ -41,8 +41,6 @@ logging.getLogger().addHandler(console)
 # so that we could get a site, its info, all the categories, tags,
 # and pillar words (which are our keywords)
 # and then call the keyword bot on each category and so on
-# TODO: write, test the metaboxes in the new site only two that need to be used
-# are faq and source
 # FIX: WE NEED A BIG OVERHALL OF THE IMAGES PART THIS SHIT IS PISSING ME OFF
 # WARNING: not a lot of error handling. DO NOT PUSH TO PRODUCTION LIKE THIS
 # ps: I know you're not gonna listen to me and push anyway but hey I tried
