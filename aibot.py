@@ -19,11 +19,11 @@ class OpenAi:
         conversation_id: str | None,
     ) -> None:
         self.client = AsyncOpenAI(api_key=openai_api_key)
-        self.keyword = keyword
-        self.categories = categories
-        self.tags = tags
-        self.related_articles = related_articles
-        self.conversation_id = conversation_id
+        self.keyword: str = keyword
+        self.categories: list[str] = categories
+        self.tags: list[str] = tags
+        self.related_articles: list[dict] = related_articles
+        self.conversation_id: str | None = conversation_id
 
     async def _initialize_conversation(self) -> None:
         if not self.conversation_id:

@@ -13,13 +13,13 @@ class Scrape:
         pixabay_api_key: str = "",
         pexels_api_key: str = "",
     ) -> None:
-        self.google_api_key = google_api_key
-        self.google_cse_id = google_cse_id
-        self.google_search_url = "https://www.googleapis.com/customsearch/v1"
-        self.pixabay_api_key = pixabay_api_key
-        self.pexels_api_key = pexels_api_key
+        self.google_api_key: str = google_api_key
+        self.google_cse_id: str = google_cse_id
+        self.google_search_url: str = "https://www.googleapis.com/customsearch/v1"
+        self.pixabay_api_key: str = pixabay_api_key
+        self.pexels_api_key: str = pexels_api_key
 
-    async def get_top_results_info(self, query: str) -> list[dict]:
+    async def get_top_results_info(self, query: str) -> list[dict[str, str]]:
         if not self.google_cse_id or not self.google_api_key:
             raise Exception("google cse id and api key are needed for this action!")
         search_results = await self._google_search(query)
@@ -73,16 +73,17 @@ class Scrape:
                     else:
                         video_count = 0
 
-                    info = {
-                        "main_title": doc.title(),
-                        "headings": headings,
-                        "word_count": word_count,
-                        "heading_count": heading_count,
-                        "image_count": image_count,
-                        "link_count": link_count,
-                        "audio_count": audio_count,
-                        "video_count": video_count,
-                        "article_body": doc.summary(),
+                    summery: str = doc.summery()
+                    info: dict[str, str] = {
+                        "main_title": str(doc.title()),
+                        "headings": str(headings),
+                        "word_count": str(word_count),
+                        "heading_count": str(heading_count),
+                        "image_count": str(image_count),
+                        "link_count": str(link_count),
+                        "audio_count": str(audio_count),
+                        "video_count": str(video_count),
+                        "article_body": str(summery),
                     }
                     data.append(info)
                 else:
