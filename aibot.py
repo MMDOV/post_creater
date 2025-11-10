@@ -13,10 +13,12 @@ class OpenAi:
         self,
         openai_api_key: str,
         keyword: str,
-        categories: list[str],
-        tags: list[str],
-        related_articles: list[dict],
-        conversation_id: str | None,
+        categories: list[str] = [],
+        tags: list[str] = [],
+        related_articles: list[dict] = [],
+        conversation_id: str | None = None,
+        html_output: str = "",
+        json_output: dict = {},
     ) -> None:
         self.client = AsyncOpenAI(api_key=openai_api_key)
         self.keyword: str = keyword
@@ -24,6 +26,8 @@ class OpenAi:
         self.tags: list[str] = tags
         self.related_articles: list[dict] = related_articles
         self.conversation_id: str | None = conversation_id
+        self.html_output: str = html_output
+        self.json_output = json_output
 
     async def _initialize_conversation(self) -> None:
         if not self.conversation_id:
@@ -154,11 +158,11 @@ class OpenAi:
                 input=[{"role": message["role"], "content": message["content"]}],
             )
         print(self.current_response.output_text)
-        json_output, html_output = await self.separate_json(
+        json_output, self.html_output = await self.separate_json(
             self.current_response.output_text
         )
 
-        return json_output, html_output
+        return self.json_output, self.html_output
 
     async def improve_article(
         self, title: str, yoast_info: list[dict]
@@ -177,7 +181,9 @@ class OpenAi:
                     f"Title: {title}\n"
                     f"Primary Keyword/Keyphrase: {self.keyword}\n\n"
                     "Here is the full article you previously wrote:\n"
-                    f"{self.current_response.output_text}\n\n"
+                    f"{self.html_output}\n\n"
+                    "And here is the json you gave back for all the extra data:\n"
+                    f"{self.json_output}\n\n"
                     "Instructions:\n"
                     "- Read the Yoast feedback carefully and address every issue listed.\n"
                     "- Keep paragraph and heading structure unless a fix requires otherwise.\n"

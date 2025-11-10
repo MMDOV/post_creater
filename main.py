@@ -58,7 +58,6 @@ async def main() -> None:
         )
 
     try:
-        # file = pd.read_csv(CSV_FILE_PATH, nrows=1)
         question = "سرما خوردگی"
         # question = str(input("Enter your keyword: "))
 
@@ -78,18 +77,11 @@ async def main() -> None:
         json_file = f"{question}.json"
         if not os.path.exists(json_file) or not os.path.exists(html_file):
             print("files not found")
-            try:
-                top_results_info = await scraper.get_top_results_info(query=question)
-            except Exception:
-                top_results_info = []
+            top_results_info = await scraper.get_top_results_info(query=question)
 
             client = OpenAi(
                 openai_api_key=api_key,
                 keyword=question,
-                categories=[],
-                tags=[],
-                related_articles=[],
-                conversation_id=None,
             )
             json_output, html_output = await client.get_full_response(
                 top_results_info=top_results_info
@@ -121,10 +113,9 @@ async def main() -> None:
         client = OpenAi(
             openai_api_key=api_key,
             keyword=question,
-            categories=[],
-            tags=[],
-            related_articles=[],
             conversation_id=conversation_id,
+            html_output=html_output,
+            json_output=json_output,
         )
 
         analyzer = Yoast(
