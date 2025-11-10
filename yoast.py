@@ -1,7 +1,5 @@
 import subprocess
 import json
-import html
-from typing import Optional, Dict
 
 
 class Yoast:

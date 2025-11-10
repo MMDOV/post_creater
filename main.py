@@ -2,14 +2,11 @@ import asyncio
 from dataclasses import dataclass
 from typing import List, Dict
 import json
-import re
-import aiohttp
 import aiofiles
 from aibot import OpenAi
 from yoast import Yoast
 from wordpress import WordPress
 from scrape import Scrape
-import pandas as pd
 from dotenv import load_dotenv
 import os
 import logging
@@ -44,15 +41,13 @@ logging.getLogger().addHandler(console)
 # FIX: WE NEED A BIG OVERHALL OF THE IMAGES PART THIS SHIT IS PISSING ME OFF
 # WARNING: not a lot of error handling. DO NOT PUSH TO PRODUCTION LIKE THIS
 # ps: I know you're not gonna listen to me and push anyway but hey I tried
-async def main():
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    wp_api_user = os.getenv("WP_API_USER", "")
-    wp_api_pass = os.getenv("WP_API_PASS", "")
-    site_url = os.getenv("SITE_URL", "")
-    google_api = os.getenv("GOOGLE_API", "")
-    google_cse = os.getenv("GOOGLE_CSE", "")
-    pixabay_api = os.getenv("PIXABAY_API", "")
-    pexels_api = os.getenv("PEXELS_API", "")
+async def main() -> None:
+    api_key: str = os.getenv("OPENAI_API_KEY", "")
+    wp_api_user: str = os.getenv("WP_API_USER", "")
+    wp_api_pass: str = os.getenv("WP_API_PASS", "")
+    site_url: str = os.getenv("SITE_URL", "")
+    google_api: str = os.getenv("GOOGLE_API", "")
+    google_cse: str = os.getenv("GOOGLE_CSE", "")
     if not api_key or not wp_api_user or not wp_api_pass or not site_url:
         logging.error(
             "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE",
@@ -63,8 +58,9 @@ async def main():
         )
 
     try:
-        file = pd.read_csv(CSV_FILE_PATH, nrows=1)
+        # file = pd.read_csv(CSV_FILE_PATH, nrows=1)
         question = "سرما خوردگی"
+        # question = str(input("Enter your keyword: "))
 
         wordpress = WordPress(
             username=wp_api_user, password=wp_api_pass, site_url=site_url
@@ -75,12 +71,9 @@ async def main():
         scraper = Scrape(
             google_api_key=google_api,
             google_cse_id=google_cse,
-            pixabay_api_key=pixabay_api,
-            pexels_api_key=pexels_api,
         )
 
         # TODO: clean this up more to the point of nothing but class and/or function calls being here
-        engine = "google"
         html_file = f"{question}.html"
         json_file = f"{question}.json"
         if not os.path.exists(json_file) or not os.path.exists(html_file):
@@ -113,12 +106,6 @@ async def main():
 
             async with aiofiles.open(html_file, "r", encoding="utf-8") as f:
                 html_output = await f.read()
-        if os.path.exists(f"{engine}_{html_file}"):
-            print("engine file exists")
-            async with aiofiles.open(
-                f"{engine}_{html_file}", "r", encoding="utf-8"
-            ) as f:
-                html_output = await f.read()
 
         print(json.dumps(json_output, indent=2, ensure_ascii=False))
         data = separate_json_data(json_output, all_tags, all_categories)
@@ -139,10 +126,6 @@ async def main():
             related_articles=[],
             conversation_id=conversation_id,
         )
-        queries = re.findall(r"<placeholder-img>(.*?)</placeholder-img>", html_output)
-        placeholders = re.findall(
-            r"<placeholder-img>.*?</placeholder-img>", html_output
-        )
 
         analyzer = Yoast(
             filters=[
@@ -155,25 +138,18 @@ async def main():
         analysys = [1, 2]
 
         while len(analysys) >= 1:
-            no_image_html = ""
-            for placeholder in placeholders:
-                no_image_html = html_output.replace(placeholder, "")
-                async with aiofiles.open(
-                    f"no_images_{html_file}", "w", encoding="utf-8"
-                ) as f:
-                    await f.write(no_image_html)
             analyzer.analyze(
                 keyword=question,
                 title=post_title,
                 meta=meta,
                 slug=slug,
-                text=no_image_html,
+                text=html_output,
                 locale="fa",
             )
             analysys = analyzer.get_analysis()
             # this part is for testing
             # ++++++++++++++++++++++++
-            print(no_image_html)
+            print(html_output)
             print(
                 json.dumps(
                     analyzer.get_analysis(["_identifier", "text"]),
@@ -206,44 +182,6 @@ async def main():
             async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
                 await f.write(html_output)
 
-        if queries:
-            print("engine:", engine)
-            for query, placeholder in zip(queries, placeholders):
-                async with aiohttp.ClientSession() as session:
-                    if engine == "pixabay":
-                        images = await scraper.pixabay_image_search(query)
-                    elif engine == "pexels":
-                        images = await scraper.pexels_image_search(query)
-                    else:
-                        images = await scraper.google_image_search(query)
-                    files = [
-                        await download_image(
-                            session, link, f"{str(i)}.{link.split('.')[-1]}"
-                        )
-                        for i, link in enumerate(images)
-                    ]
-                    if len(files) >= 1:
-                        best_image = files[0]
-                    else:
-                        html_output = html_output.replace(placeholder, "")
-                        continue
-                    img_type = best_image.split(".")[-1]
-                    for file in files:
-                        if file != best_image:
-                            os.remove(file)
-                    os.rename(
-                        best_image, f"{query.replace(' ', '_')}_{engine}.{img_type}"
-                    )
-                image_url = await wordpress.upload_image(
-                    image_path=f"{query.replace(' ', '_')}_{engine}.{img_type}"
-                )
-                new_tag = f'<img src="{image_url}" alt="{query}">'
-                html_output = html_output.replace(placeholder, new_tag)
-                print("saving to file")
-                async with aiofiles.open(
-                    f"{engine}_{html_file}", "w", encoding="utf-8"
-                ) as f:
-                    await f.write(html_output)
         # TODO: modify the images using Pillow
 
         await wordpress.create_post(
