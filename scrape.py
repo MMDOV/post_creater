@@ -1,4 +1,6 @@
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+import re
 import aiohttp
 import trafilatura
 from readability import Document
@@ -21,71 +23,51 @@ class Scrape:
         data = []
         if search_results:
             for result in search_results:
+                if len(data) >= 5:
+                    break
                 response = trafilatura.fetch_url(result)
-                if response:
+                if not response:
+                    print(f"[-] No response for url: {result}")
+                    continue
+                print(response[:500])
+                response = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", response)
+                replacement_character_ratio = response.count("\ufffd") / len(response)
+                if replacement_character_ratio > 0.01:  # e.g., >1% replacement chars
+                    print(f"[!] Skipping replacement garbled page: {result}")
+                    continue
+
+                print(
+                    f"[+] Response type: {type(response)} | length: {len(response)} | url: {result}"
+                )
+
+                try:
                     doc = Document(response)
-                    soup = BeautifulSoup(doc.summary(), "lxml")
+                    summary = doc.summary()
+                    title = doc.title()
 
+                    soup = BeautifulSoup(summary, "lxml")
                     plain_text = trafilatura.extract(response)
-                    if plain_text:
-                        word_count = len(plain_text.split())
-                    else:
-                        word_count = 0
 
-                    headings = soup.find_all(
-                        name=[
-                            "h1",
-                            "h2",
-                            "h3",
-                        ]
-                    )
-                    if headings:
-                        heading_count = len(headings)
-                    else:
-                        heading_count = 0
-
-                    images = soup.find_all(name="img")
-                    if images:
-                        image_count = len(images)
-                    else:
-                        image_count = 0
-
-                    links = soup.find_all(name="a")
-                    if links:
-                        link_count = len(links)
-                    else:
-                        link_count = 0
-
-                    audios = soup.find_all(name="audio")
-                    if audios:
-                        audio_count = len(audios)
-                    else:
-                        audio_count = 0
-
-                    videos = soup.find_all(name=["video", "iframe"])
-                    if videos:
-                        video_count = len(videos)
-                    else:
-                        video_count = 0
-
-                    summery: str = doc.summary()
-                    info: dict[str, str] = {
-                        "main_title": str(doc.title()),
-                        "headings": str(headings),
-                        "word_count": str(word_count),
-                        "heading_count": str(heading_count),
-                        "image_count": str(image_count),
-                        "link_count": str(link_count),
-                        "audio_count": str(audio_count),
-                        "video_count": str(video_count),
-                        "article_body": str(summery),
+                    info = {
+                        "main_title": str(title),
+                        "headings": str(soup.find_all(["h1", "h2", "h3"])),
+                        "word_count": str(len(plain_text.split()) if plain_text else 0),
+                        "heading_count": str(len(soup.find_all(["h1", "h2", "h3"]))),
+                        "image_count": str(len(soup.find_all("img"))),
+                        "link_count": str(len(soup.find_all("a"))),
+                        "audio_count": str(len(soup.find_all("audio"))),
+                        "video_count": str(len(soup.find_all(["video", "iframe"]))),
+                        "article_body": str(summary),
                     }
+
                     data.append(info)
-                else:
+
+                except Exception as e:
+                    print(f"[ERROR] Failed to process {result}: {e}")
                     continue
         else:
             raise Exception("no search results found")
-        print(data)
+        print(f"data len: {len(data)}")
         return data
 
     async def _google_search(self, query: str, num_results=5) -> list[str]:
@@ -104,9 +86,10 @@ class Scrape:
 
         links = []
         for item in results.get("items", []):
-            if len(links) >= num_results:
+            if len(links) >= num_results * 2:
                 break
-            if not item["link"].startswith("https://www.wikipedia.org/"):
+            netloc = urlparse(item["link"]).netloc
+            if not netloc.endswith(".wikipedia.org"):
                 links.append(item["link"])
 
         return links
