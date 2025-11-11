@@ -47,6 +47,11 @@ class OpenAi:
         )
 
     async def get_full_response(self, top_results_info: list[dict]) -> tuple[dict, str]:
+        # TODO: it needs to also generate an SEO title
+        # example prompt:
+        ## “Generate both a human-friendly article title and a separate
+        ## SEO meta title under 60 characters.
+        ## The SEO title should include the main keyword naturally.”
         # TODO: still need to figure out how are we adding the pillar page
 
         print("keyword:", self.keyword)
