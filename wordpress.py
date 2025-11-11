@@ -47,8 +47,10 @@ class WordPress:
 
     def _build_post_payload(
         self,
+        keyword: str,
         title: str,
         content: str,
+        slug: str,
         meta: str,
         faqs: list[dict],
         article_sources: list[dict] = [],
@@ -57,8 +59,6 @@ class WordPress:
         status: str = "draft",
     ) -> dict:
         """Return a dict ready for either create_post or yoast-preview render."""
-
-        meta_block = f'<meta name="description" content="{meta}" />'
 
         faq_items = (
             {
@@ -87,13 +87,17 @@ class WordPress:
 
         payload = {
             "title": title,
-            "content": content + "\n\n" + meta_block,
+            "content": content,
+            "slug": slug,
             "meta": {
                 "faq_items_v2": faq_items,
                 "article_sources": sources,
             },
             "categories": categories,
             "tags": tags,
+            "yoast_description": meta,
+            "yoast_keyword": keyword,
+            "yoast_title": title,
         }
         if status is not None:
             payload["status"] = status
@@ -102,8 +106,10 @@ class WordPress:
     # TODO: test and see if metadescription works
     async def create_post(
         self,
+        keyword: str,
         title: str,
         content: str,
+        slug: str,
         meta: str,
         faqs: list[dict],
         article_sources: list[dict] = [],
@@ -112,7 +118,16 @@ class WordPress:
         status: str = "draft",
     ):
         post_data = self._build_post_payload(
-            title, content, meta, faqs, article_sources, categories, tags, status
+            keyword,
+            title,
+            content,
+            slug,
+            meta,
+            faqs,
+            article_sources,
+            categories,
+            tags,
+            status,
         )
         url = f"{self.site_url}wp-json/wp/v2/posts"
         async with aiohttp.ClientSession(

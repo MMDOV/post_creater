@@ -126,7 +126,15 @@ async def main() -> None:
                 "internalLinks",
             ]
         )
-        analysys = [1, 2]
+        analyzer.analyze(
+            keyword=question,
+            title=post_title,
+            meta=meta,
+            slug=slug,
+            text=html_output,
+            locale="fa",
+        )
+        analysys = analyzer.get_analysis()
 
         while len(analysys) >= 1:
             analyzer.analyze(
@@ -176,8 +184,10 @@ async def main() -> None:
         # TODO: modify the images using Pillow
 
         await wordpress.create_post(
+            keyword=question,
             title=post_title,
             content=html_output,
+            slug=slug,
             faqs=faqs,
             meta=meta,
             article_sources=sources,
@@ -215,6 +225,7 @@ class JsonData:
     conversation_id: str
 
 
+# FIX: the tags and categories are not being sent to the api currectly
 def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> JsonData:
     picked_category_names = json["categories"]
     picked_category_ids = [
