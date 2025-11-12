@@ -38,7 +38,6 @@ logging.getLogger().addHandler(console)
 # so that we could get a site, its info, all the categories, tags,
 # and pillar words (which are our keywords)
 # and then call the keyword bot on each category and so on
-# FIX: WE NEED A BIG OVERHALL OF THE IMAGES PART THIS SHIT IS PISSING ME OFF
 # WARNING: not a lot of error handling. DO NOT PUSH TO PRODUCTION LIKE THIS
 # ps: I know you're not gonna listen to me and push anyway but hey I tried
 async def main() -> None:
@@ -58,14 +57,16 @@ async def main() -> None:
         )
 
     try:
-        question = "سرما خوردگی"
-        # question = str(input("Enter your keyword: "))
+        keyphrase = "سرما خوردگی"
+        # keyphrase = str(input("Enter your keyword: "))
 
         wordpress = WordPress(
             username=wp_api_user, password=wp_api_pass, site_url=site_url
         )
         all_tags = await wordpress.get_tags()
+        print(f"all tags:{all_tags}")
         all_categories = await wordpress.get_categories()
+        print(f"all categories:{all_categories}")
 
         scraper = Scrape(
             google_api_key=google_api,
@@ -73,15 +74,17 @@ async def main() -> None:
         )
 
         # TODO: clean this up more to the point of nothing but class and/or function calls being here
-        html_file = f"{question}.html"
-        json_file = f"{question}.json"
+        html_file = f"{keyphrase}.html"
+        json_file = f"{keyphrase}.json"
         if not os.path.exists(json_file) or not os.path.exists(html_file):
             print("files not found")
-            top_results_info = await scraper.get_top_results_info(query=question)
+            top_results_info = await scraper.get_top_results_info(query=keyphrase)
 
             client = OpenAi(
                 openai_api_key=api_key,
-                keyword=question,
+                keyword=keyphrase,
+                categories=list(all_categories.values()),
+                tags=list(all_tags.values()),
             )
             json_output, html_output = await client.get_full_response(
                 top_results_info=top_results_info
@@ -112,7 +115,9 @@ async def main() -> None:
         conversation_id = data.conversation_id
         client = OpenAi(
             openai_api_key=api_key,
-            keyword=question,
+            keyword=keyphrase,
+            categories=list(all_categories.values()),
+            tags=list(all_tags.values()),
             conversation_id=conversation_id,
             html_output=html_output,
             json_output=json_output,
@@ -127,7 +132,7 @@ async def main() -> None:
             ]
         )
         analyzer.analyze(
-            keyword=question,
+            keyword=keyphrase,
             title=post_title,
             meta=meta,
             slug=slug,
@@ -138,7 +143,7 @@ async def main() -> None:
 
         while len(analysys) >= 1:
             analyzer.analyze(
-                keyword=question,
+                keyword=keyphrase,
                 title=post_title,
                 meta=meta,
                 slug=slug,
@@ -181,10 +186,8 @@ async def main() -> None:
             async with aiofiles.open(html_file, "w", encoding="utf-8") as f:
                 await f.write(html_output)
 
-        # TODO: modify the images using Pillow
-
         await wordpress.create_post(
-            keyword=question,
+            keyword=keyphrase,
             title=post_title,
             content=html_output,
             slug=slug,
@@ -227,6 +230,8 @@ class JsonData:
 
 # FIX: the tags and categories are not being sent to the api currectly
 def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> JsonData:
+    print("got json data, separating...")
+    print(json)
     picked_category_names = json["categories"]
     picked_category_ids = [
         cid for cid, name in all_categories.items() if name in picked_category_names
@@ -234,6 +239,10 @@ def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> Json
 
     picked_tag_names = json["tags"]
     picked_tag_ids = [cid for cid, name in all_tags.items() if name in picked_tag_names]
+    print(f"categories id:{picked_category_ids}")
+    print(f"categories:{picked_category_names}")
+    print(f"tags id:{picked_tag_ids}")
+    print(f"tags:{picked_tag_names}")
 
     return JsonData(
         picked_category_ids=picked_category_ids,

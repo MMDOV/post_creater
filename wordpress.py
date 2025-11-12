@@ -103,7 +103,6 @@ class WordPress:
             payload["status"] = status
         return payload
 
-    # TODO: test and see if metadescription works
     async def create_post(
         self,
         keyword: str,

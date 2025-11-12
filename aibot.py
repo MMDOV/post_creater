@@ -45,6 +45,7 @@ class OpenAi:
             input=input,
             conversation=self.conversation_id,
         )
+        print(self.current_response.output_text)
 
     async def get_full_response(self, top_results_info: list[dict]) -> tuple[dict, str]:
         # TODO: it needs to also generate an SEO title
@@ -55,55 +56,63 @@ class OpenAi:
         # TODO: still need to figure out how are we adding the pillar page
 
         print("keyword:", self.keyword)
+        print("Categories:", self.categories)
+        print("tags:", self.tags)
 
         messages = [
             {
                 "role": "developer",
                 "content": (
-                    "You are an assistant that will receive instructions for writing a Persian SEO blog post.\n"
-                    "- Do NOT generate any blog content until I explicitly send the signal [FINAL].\n"
-                    "- For every message before [FINAL], simply acknowledge (e.g. 'Noted').\n"
-                    "- When [FINAL] is received, combine ALL previously provided data with the final generation "
-                    "instructions to produce the complete output."
+                    "You are an expert Persian SEO content writer and assistant.\n"
+                    "Your task is to generate structured, SEO-optimized Persian blog posts using information provided step-by-step.\n\n"
+                    "### Core Rules:\n"
+                    "- NEVER generate any article content until you explicitly receive the command [FINAL].\n"
+                    "- Before [FINAL], your only valid responses are brief acknowledgements such as 'Noted' or 'Understood'.\n"
+                    "- On receiving [FINAL], you must combine **all previously provided context** (keyword, Google results, related articles, tags/categories, etc.) "
+                    "to generate the full, final output.\n"
+                    "- Maintain a professional, informative tone and natural Persian phrasing (avoid translation-like structures)."
                 ),
             },
             {
                 "role": "developer",
                 "content": (
-                    "When generation begins:\n"
-                    "• Return the result as clean HTML only—NO <html>, <head>, or <body> tags.\n"
-                    "• Wrap the entire content in a single <div lang='fa' dir='rtl'>.\n"
-                    "• Use only clean structural tags (<h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.).\n"
-                    "• Do NOT add inline styles, CSS classes, or custom attributes (to avoid breaking theme styling).\n"
-                    "• Verify all information and ensure it is up-to-date and correct.\n"
-                    "• After the HTML, append a JSON block containing:\n"
-                    '   - "title": generated SEO title\n'
-                    '   - "slug": an SEO-friendly English slug to be used as the URL (avoid Persian characters)\n'
-                    '   - "categories": [list of relevant categories]\n'
-                    '   - "tags": [list of 5 relevant tags]\n'
-                    '   - "faqs": [3 objects {"question","answer"}]\n'
-                    '   - "meta": meta description (≤160 characters containing the Primary Keyword)\n'
-                    '   - "sources": list of objects with "title" and "link" for every source you referenced in the article'
+                    "### Output Format (only used during [FINAL]):\n"
+                    "1. Return clean HTML only — no <html>, <head>, or <body> tags.\n"
+                    "2. Wrap the entire article in:\n"
+                    "   <div lang='fa' dir='rtl'> ... </div>\n"
+                    "3. Use only structural tags (<h1>, <h2>, <h3>, <p>, <ul>, <ol>, <a>, <img>, etc.).\n"
+                    "4. Do NOT use inline styles, CSS classes, or custom attributes.\n"
+                    "5. Ensure factual accuracy and current information.\n\n"
+                    "After the HTML, append a valid JSON block with the following fields:\n"
+                    "{\n"
+                    '  "title": "Generated SEO title",\n'
+                    '  "slug": "english-seo-slug",\n'
+                    '  "categories": [list of relevant categories],\n'
+                    '  "tags": [exactly 5 relevant tags],\n'
+                    '  "faqs": [{"question": "...", "answer": "..."}, ... 3 total],\n'
+                    '  "meta": "≤160 characters meta description (must include the primary keyword)",\n'
+                    '  "sources": [{"title": "...", "link": "..."}, ...]\n'
+                    "}\n"
+                    "Do not output anything outside this format."
                 ),
             },
             {
                 "role": "user",
                 "content": (
                     f'Primary Keyword: "{self.keyword}"\n'
-                    "Do not write the article yet—just acknowledge."
+                    "Acknowledge only. Do not write any article content yet."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    "You will receive the data extracted from the top 5 Google results for this keyword. "
-                    "Each message will contain one result. "
-                    "Do NOT generate the article yet; just acknowledge each part.\n\n"
-                    "Important guidance:\n"
-                    "- You can change the number of elements (headings, images, etc.) based on this info, "
-                    "but keep the main structure as described.\n"
-                    "- Use this information to improve relevance, heading structure, and coverage, while ensuring originality. "
-                    "Do not copy text."
+                    "You will now receive the top 5 Google search results for this keyword.\n"
+                    "Each result will arrive separately. Do NOT generate any text yet — just acknowledge each one.\n\n"
+                    "### When generating later:\n"
+                    "- Use insights from these results to match or exceed their coverage.\n"
+                    "- Do NOT copy text. Rephrase ideas in your own words.\n"
+                    "- Improve structure, readability, and topical depth using these insights.\n"
+                    "- Incorporate common subtopics and related questions found across multiple results."
                 ),
             },
             *[
@@ -111,7 +120,7 @@ class OpenAi:
                     "role": "user",
                     "content": (
                         f"Top result #{i + 1}:\n{info}\n"
-                        "Acknowledge only. Incorporate this later when generating the article."
+                        "Acknowledge only. Incorporate this data later when generating the article."
                     ),
                 }
                 for i, info in enumerate(top_results_info)
@@ -119,41 +128,44 @@ class OpenAi:
             {
                 "role": "user",
                 "content": (
-                    "Related internal blog articles for internal linking:\n"
+                    "Related internal blog articles (for internal linking):\n"
                     f"{self.related_articles}\n"
-                    "Insert natural descriptive anchor text links to these wherever relevant, but avoid keyword stuffing.\n"
+                    "Use them later to insert natural descriptive anchor text links in the article.\n"
+                    "Avoid keyword stuffing or overlinking. Acknowledge only."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Available categories: {self.categories}\n"
+                    f"Available tags: {self.tags}\n\n"
+                    "Rules:\n"
+                    "- Select only from these lists when filling the JSON.\n"
+                    "- Do NOT create new category or tag names.\n"
+                    "- Pick those most relevant to your article’s focus.\n"
                     "Acknowledge only."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Categories: {self.categories}\nTags: {self.tags}\nAcknowledge only."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
                     "[FINAL]\n"
-                    "Now generate a 1500-word SEO-optimized article using ALL information above.\n"
-                    "Follow this structure exactly:\n"
-                    "• **Title:** A compelling, SEO-friendly blog post title.\n"
-                    "• **Summary:** A short opening paragraph summarizing the article.\n"
-                    "• **Introduction (~100 words).**\n"
-                    "• **12 main headings** (include the Primary Keyword naturally in the first 100 words).\n"
-                    "• 2–3 subheadings under relevant main headings.\n"
-                    "• Short paragraphs (≤3 lines) in clear, simple language (Flesch-Kincaid Grade 8–9).\n"
-                    "• **Conclusion.**\n\n"
-                    "JSON Output:\n"
-                    "After the HTML content, return a JSON block with:\n"
-                    "• title: the generated SEO title\n"
-                    "• slug: an SEO-friendly English slug to be used as the URL (avoid Persian characters)\n"
-                    "• categories: list of relevant categories\n"
-                    "• tags: list of 5 relevant tags\n"
-                    "• faqs: 3 objects with question/answer\n"
-                    "• meta: meta description (≤160 characters containing the Primary Keyword)\n"
-                    "• sources: list of objects with 'title' and 'link' for every source you referenced in the article\n\n"
-                    "Only return valid HTML followed by the JSON block."
+                    "Now generate a complete 1500-word Persian blog post optimized for Yoast SEO.\n\n"
+                    "### Structure:\n"
+                    "• **Title:** Compelling, SEO-friendly title including the primary keyword near the start.\n"
+                    "• **Summary paragraph:** 1 short paragraph summarizing the article.\n"
+                    "• **Introduction (~100 words)** introducing the topic naturally.\n"
+                    "• **12 main headings (H2)** with 2–3 subheadings (H3) under relevant sections.\n"
+                    "• Short paragraphs (≤3 lines), clear sentences, and transition words (مثل «از طرفی»، «در نتیجه»، «به طور کلی»).\n"
+                    "• **Conclusion:** A concise wrap-up paragraph.\n\n"
+                    "### SEO Guidelines:\n"
+                    "- Include the primary keyword naturally in the title, first paragraph, meta description, and several times in the text.\n"
+                    "- Maintain a natural flow — avoid keyword stuffing.\n"
+                    "- Add internal and external links naturally where relevant.\n"
+                    "- Use informative, keyword-rich headings.\n"
+                    "- Keep readability high (simple, clear language).\n\n"
+                    "### JSON Output:\n"
+                    "Follow the schema described above. Output only HTML followed by JSON, nothing else."
                 ),
             },
         ]
@@ -163,9 +175,7 @@ class OpenAi:
                 input=[{"role": message["role"], "content": message["content"]}],
             )
         print(self.current_response.output_text)
-        json_output, self.html_output = await self.separate_json(
-            self.current_response.output_text
-        )
+        await self.separate_json(self.current_response.output_text)
 
         return self.json_output, self.html_output
 
@@ -176,80 +186,93 @@ class OpenAi:
             {
                 "role": "user",
                 "content": (
-                    "You are an SEO assistant. Below is the result of a Yoast SEO analysis "
-                    "for your previously written article. Your job is to revise the article "
-                    "to fix ONLY the issues listed in the analysis, keeping the same tone, "
-                    "topic, and overall structure.\n\n"
-                    "Yoast analysis:\n"
-                    f"{yoast_info}\n\n"
-                    "Article details:\n"
+                    "You are an expert Persian SEO assistant and editor.\n"
+                    "Your task is to improve an existing article using the feedback from Yoast SEO analysis.\n\n"
+                    "### Yoast quantitative guidance (apply these ranges when making edits):\n"
+                    "- **Keyword density:** 0.5%–3% of total words (e.g., for 1500 words, 8–30 occurrences).\n"
+                    "- **Meta description:** 120–156 characters, must include the primary keyword.\n"
+                    "- **Subheadings with keyword:** 30–75% of H2/H3 should include the keyword or a synonym.\n"
+                    "- **Consecutive sentences:** No more than 2 sentences in a row should start with the same word.\n"
+                    "- **Sentence length:** Prefer sentences under 20 words.\n"
+                    "- **Transition words:** Use them in ≥30% of sentences.\n"
+                    "- **Passive voice:** Keep under 10% of sentences.\n"
+                    "- **Paragraph length:** ≤150 words per paragraph.\n\n"
+                    "### Instructions for improvement:\n"
+                    "- Apply the **smallest possible edits** needed to resolve each Yoast issue.\n"
+                    "- Do NOT rewrite large portions of text unless absolutely necessary.\n"
+                    "- Preserve any previously correct optimizations.\n"
+                    "- Only modify the sections that directly relate to the issues provided.\n"
+                    "- When adjusting ranges (like keyword density), move slightly toward the target without overcompensating.\n"
+                    "- Keep tone, topic, structure, headings, and tags/categories unchanged unless absolutely necessary.\n\n"
+                    "### Context:\n"
                     f"Title: {title}\n"
                     f"Primary Keyword/Keyphrase: {self.keyword}\n\n"
-                    "Here is the full article you previously wrote:\n"
+                    f"Yoast analysis feedback:\n{yoast_info}\n\n"
+                    "Full article HTML:\n"
                     f"{self.html_output}\n\n"
-                    "And here is the json you gave back for all the extra data:\n"
+                    "Original JSON data (for reference):\n"
                     f"{self.json_output}\n\n"
-                    "Instructions:\n"
-                    "- Read the Yoast feedback carefully and address every issue listed.\n"
-                    "- Keep paragraph and heading structure unless a fix requires otherwise.\n"
-                    "- Do NOT change the tone, meaning, or topic.\n"
-                    "- Only modify text where necessary to fix Yoast issues.\n\n"
-                    "Output format (must match the initial generation format):\n"
-                    "• Return the improved article as clean HTML only—NO <html>, <head>, or <body> tags.\n"
-                    "• Wrap the entire content in a single <div lang='fa' dir='rtl'>.\n"
-                    "• Use only clean structural tags (<h1>, <h2>, <p>, <ul>, <ol>, <a>, etc.).\n"
-                    "• Do NOT add inline styles, CSS classes, or custom attributes.\n"
-                    "• After the HTML, append a JSON block containing:\n"
+                    "### Output requirements:\n"
+                    "1. Return **improved article as clean HTML** only — no <html>, <head>, or <body> tags.\n"
+                    "2. Wrap content in a single <div lang='fa' dir='rtl'> ... </div>\n"
+                    "3. Use only structural tags (<h1>, <h2>, <h3>, <p>, <ul>, <ol>, <a>, <img>, etc.)\n"
+                    "4. Do NOT add inline styles, CSS classes, or custom attributes.\n\n"
+                    "5. Append a **valid JSON block** after the HTML with:\n"
                     '   - "title": improved SEO title (if relevant)\n'
                     '   - "categories": [list of relevant categories]\n'
                     '   - "tags": [list of 5 relevant tags]\n'
                     '   - "faqs": [3 objects {"question","answer"}]\n'
                     '   - "meta": meta description (≤160 characters, must include the Primary Keyword)\n'
                     '   - "sources": list of objects with "title" and "link" for every source referenced in the article\n\n'
-                    "Ensure the format is identical to the one used in the original generation step so it can be parsed correctly."
+                    "### Self-check step:\n"
+                    "- Before returning, verify that each Yoast issue is now within the target ranges above.\n"
+                    "- If an issue is still out of range, adjust slightly and re-check once.\n"
+                    "- Only return the final improved HTML and JSON when all adjustments are within range.\n\n"
+                    "Ensure format is identical to original generation so it can be parsed correctly."
                 ),
             }
         ]
 
         await self._get_text_response(input_prompt)
+        await self.separate_json(text=self.current_response.output_text)
 
-        json_output, html_output = await self.separate_json(
-            text=self.current_response.output_text
-        )
+        return self.json_output, self.html_output
 
-        return json_output, html_output
-
-    async def separate_json(self, text: str, max_fixes: int = 3) -> tuple[dict, str]:
+    async def separate_json(self, text: str, max_fixes: int = 3):
         print("trying to separate")
-        # Store conversation_id before any processing
         conversation_id = self.conversation_id
 
+        match = re.search(r"\{[\s\S]*\}", text)
+        if match:
+            print("initial: theres a match")
+            html_output = text[: match.start()].strip()
+            json_text = match.group()
+        else:
+            print("initial: no match found")
+            html_output = text.strip()
+            json_text = "{}"
+
+        try:
+            json_output = json.loads(json_text)
+        except json.JSONDecodeError:
+            print("initial: json decode error")
+            json_output = {}
+
         for attempt in range(1, max_fixes + 1):
-            match = re.search(r"\{[\s\S]*\}", text)
-            if match:
-                json_text = match.group()
-                html_output = text[: match.start()].strip()
-                try:
-                    json_output = json.loads(json_text)
-                except json.JSONDecodeError:
-                    json_output = {}
-            else:
-                html_output = text.strip()
-                json_output = {}
-
-            # Add conversation_id to json_output
             json_output["conversation_id"] = conversation_id
-
             issues = validate_post_json(json_output)
+
             if not issues:
                 print(f"JSON validated successfully after {attempt} attempt(s)")
-                return json_output, html_output
+                self.json_output = json_output
+                self.html_output = html_output
+                return
 
             print(f"Attempt {attempt}: JSON has issues -> {issues}")
             missing_keys = ", ".join(issues)
             fix_message = (
                 f"The JSON you provided is missing or invalid in the following fields: {missing_keys}.\n"
-                "Please fix it and return the full HTML and JSON again, in the same format as before.\n"
+                "Please fix the JSON and return only the corrected JSON object, nothing else.\n"
                 "Reminder: JSON format should include keys: title, slug, categories, tags, faqs, meta, and sources."
             )
 
@@ -257,26 +280,18 @@ class OpenAi:
                 await self._get_text_response(
                     [{"role": "user", "content": fix_message}]
                 )
-                text = self.current_response.output_text
+                response_text = self.current_response.output_text.strip()
+                try:
+                    json_output = json.loads(response_text)
+                except json.JSONDecodeError:
+                    print("json decode error in fix attempt")
+                    json_output = {}
             except Exception as e:
                 print("Error while requesting fix:", e)
                 break
-        # Final attempt processing
-        match = re.search(r"\{[\s\S]*\}", text)
-        if match:
-            json_text = match.group()
-            html_output = text[: match.start()].strip()
-            try:
-                json_output = json.loads(json_text)
-            except json.JSONDecodeError:
-                json_output = {}
-        else:
-            html_output = text.strip()
-            json_output = {}
-        # Add conversation_id to the final json_output
-        json_output["conversation_id"] = conversation_id
 
-        # Fill in missing structure
+        # --- Final fallback after all attempts ---
+        json_output["conversation_id"] = conversation_id
         required_structure = {
             "title": "",
             "slug": "",
@@ -289,8 +304,10 @@ class OpenAi:
         for key, value in required_structure.items():
             if key not in json_output:
                 json_output[key] = value
+
         print("Could not get a valid JSON after several attempts.")
-        return json_output, html_output
+        self.json_output = json_output
+        self.html_output = html_output
 
 
 def validate_post_json(data: dict):
