@@ -57,7 +57,7 @@ async def main() -> None:
         )
 
     try:
-        keyphrase = "سرما خوردگی"
+        keyphrase = "آنفولانزا"
         # keyphrase = str(input("Enter your keyword: "))
 
         wordpress = WordPress(
@@ -156,7 +156,7 @@ async def main() -> None:
             print(html_output)
             print(
                 json.dumps(
-                    analyzer.get_analysis(["_identifier", "text"]),
+                    analyzer.get_analysis(["_identifier", "text", "problemSentences"]),
                     indent=2,
                     ensure_ascii=False,
                 )
