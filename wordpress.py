@@ -1,15 +1,87 @@
 import aiohttp
 import os
 import json
+from html import unescape
+from bs4 import BeautifulSoup
 
 
-# TODO: get context for a related article and orginize it.
-# you need to account for some stuff missing and replace them manualy
-class WordPress:
+class WordPressClient:
     def __init__(self, username: str, password: str, site_url: str) -> None:
         self.username = username
         self.password = password
         self.site_url = site_url
+
+    async def get_post_info(
+        self,
+        post_id: int = -1,
+        post_slug: str = "",
+        fields: list = ["title", "first_paragraphs", "categories", "tags", "url"],
+    ):
+        """
+        Fetch a WordPress post and extract desired fields.
+        Returns a dict with requested fields.
+        """
+
+        endpoint = f"{self.site_url}/wp-json/wp/v2/posts"
+        if post_id != -1:
+            url = f"{endpoint}/{post_id}"
+        elif post_slug != "":
+            url = f"{endpoint}?slug={post_slug}"
+        else:
+            raise ValueError("Must provide post_id or post_slug")
+
+        print(url)
+        auth = (
+            aiohttp.BasicAuth(self.username, self.password)
+            if self.username and self.password
+            else None
+        )
+
+        async with aiohttp.ClientSession(auth=auth) as session:
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                if isinstance(data, list):
+                    data = data[0]
+
+        result = {}
+        if "title" in fields:
+            title = BeautifulSoup(
+                data.get("title", {}).get("rendered", ""), "html.parser"
+            ).get_text()
+            result["title"] = unescape(title).strip()
+
+        if "first_paragraphs" in fields:
+            content_html = data.get("content", {}).get("rendered", "")
+            content_text = BeautifulSoup(content_html, "html.parser").get_text().strip()
+            paragraphs = [p.strip() for p in content_text.split("\n") if p.strip()]
+            summary_text = ""
+
+            if paragraphs and paragraphs[0] == result["title"]:
+                paragraphs = paragraphs[1:]
+
+            if paragraphs:
+                summary_text = " ".join(paragraphs[:2])
+
+            result["first_paragraphs"] = unescape(summary_text)
+
+        if "categories" in (fields or []):
+            cat_map = await self.get_categories()
+            result["categories"] = [
+                cat_map.get(cat_id, str(cat_id))
+                for cat_id in data.get("categories", [])
+            ]
+
+        if "tags" in (fields or []):
+            tag_map = await self.get_tags()
+            result["tags"] = [
+                tag_map.get(tag_id, str(tag_id)) for tag_id in data.get("tags", [])
+            ]
+
+        if "url" in fields:
+            result["url"] = data.get("link", "")
+
+        return result
 
     # FIX: meta description of images should be included
     # FIX: the location shit that gpt gave you does nothing

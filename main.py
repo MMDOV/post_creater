@@ -5,7 +5,7 @@ import json
 import aiofiles
 from aibot import OpenAi
 from yoast import Yoast
-from wordpress import WordPress
+from wordpress import WordPressClient
 from scrape import Scrape
 from dotenv import load_dotenv
 import os
@@ -48,6 +48,8 @@ async def main() -> None:
     google_api: str = os.getenv("GOOGLE_API", "")
     google_cse: str = os.getenv("GOOGLE_CSE", "")
     keyphrase: str = os.getenv("KEYPHRASE", "")
+    ids_str = os.getenv("RELATED_ARTICLE_IDS", "")
+    related_article_ids = [int(x) for x in ids_str.split(",") if x]
     if (
         not api_key
         or not wp_api_user
@@ -64,7 +66,7 @@ async def main() -> None:
         )
 
     try:
-        wordpress = WordPress(
+        wordpress = WordPressClient(
             username=wp_api_user, password=wp_api_pass, site_url=site_url
         )
         all_tags = await wordpress.get_tags()
@@ -83,12 +85,18 @@ async def main() -> None:
         if not os.path.exists(json_file) or not os.path.exists(html_file):
             print("files not found")
             top_results_info = await scraper.get_top_results_info(query=keyphrase)
+            related_articles = []
+            if related_article_ids:
+                for id in related_article_ids:
+                    related_article = await wordpress.get_post_info(post_id=id)
+                    related_articles.append(related_article)
 
             client = OpenAi(
                 openai_api_key=api_key,
                 keyword=keyphrase,
                 categories=list(all_categories.values()),
                 tags=list(all_tags.values()),
+                related_articles=related_articles,
             )
             json_output, html_output = await client.get_full_response(
                 top_results_info=top_results_info
