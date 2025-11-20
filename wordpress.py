@@ -3,6 +3,8 @@ import os
 import json
 
 
+# TODO: get context for a related article and orginize it.
+# you need to account for some stuff missing and replace them manualy
 class WordPress:
     def __init__(self, username: str, password: str, site_url: str) -> None:
         self.username = username

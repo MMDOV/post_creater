@@ -232,7 +232,6 @@ class JsonData:
     conversation_id: str
 
 
-# FIX: the tags and categories are not being sent to the api currectly
 def separate_json_data(json: dict, all_tags: dict, all_categories: dict) -> JsonData:
     print("got json data, separating...")
     print(json)

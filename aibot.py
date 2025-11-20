@@ -48,13 +48,6 @@ class OpenAi:
         print(self.current_response.output_text)
 
     async def get_full_response(self, top_results_info: list[dict]) -> tuple[dict, str]:
-        # TODO: it needs to also generate an SEO title
-        # example prompt:
-        ## “Generate both a human-friendly article title and a separate
-        ## SEO meta title under 60 characters.
-        ## The SEO title should include the main keyword naturally.”
-        # TODO: still need to figure out how are we adding the pillar page
-
         print("keyword:", self.keyword)
         print("Categories:", self.categories)
         print("tags:", self.tags)
@@ -129,9 +122,21 @@ class OpenAi:
                 "role": "user",
                 "content": (
                     "Related internal blog articles (for internal linking):\n"
-                    f"{self.related_articles}\n"
-                    "Use them later to insert natural descriptive anchor text links in the article.\n"
-                    "Avoid keyword stuffing or overlinking. Acknowledge only."
+                    f"{self.related_articles}\n\n"
+                    "Instructions for internal linking:\n"
+                    "- Insert links naturally in sentences where they add value and context.\n"
+                    "- Use descriptive, reader-friendly anchor text derived from the article title, summary, or categories.\n"
+                    "- Avoid keyword stuffing and do not force links into unrelated sentences.\n"
+                    "- Limit to 2–5 internal links per article, distributed across different sections.\n"
+                    "- Before placing a link, **derive the primary intent of each article** based on the information provided (title, summary, tags, categories). "
+                    "Use this intent to guide where in the article the link fits best.\n"
+                    "  • Informational: for readers seeking general knowledge.\n"
+                    "  • Educational / Research: for deeper analysis, comparisons, or detailed explanations.\n"
+                    "  • Commercial Investigation: for evaluating options before a purchase or decision.\n"
+                    "  • Transactional: for readers ready to buy, book, or submit a form.\n"
+                    "  • Navigational: when a reader is looking specifically for a brand, product, or website.\n"
+                    "  • Local Intent: when a reader is searching for location-specific results.\n"
+                    "Acknowledge only; do not generate article content yet."
                 ),
             },
             {
@@ -147,6 +152,20 @@ class OpenAi:
                 ),
             },
             {
+                "role": "developer",
+                "content": (
+                    "### HTML Formatting Guidelines:\n"
+                    "- Use <strong> for bold emphasis.\n"
+                    "- Use <em> for italic emphasis.\n"
+                    "- Use <blockquote> for quotes or cited statements.\n"
+                    "- Use <ul>/<ol> and <li> for bullet and numbered lists.\n"
+                    "- Use <table>, <tr>, <th>, <td> where it helps organize information clearly.\n"
+                    "- Use <mark> to highlight key terms if needed.\n"
+                    "- Maintain consistent semantic HTML formatting throughout the article.\n\n"
+                    "When generating the article on [FINAL], follow these HTML guidelines along with the JSON structure requirements."
+                ),
+            },
+            {
                 "role": "user",
                 "content": (
                     "[FINAL]\n"
@@ -157,7 +176,8 @@ class OpenAi:
                     "• **Introduction (~100 words)** introducing the topic naturally.\n"
                     "• **12 main headings (H2)** with 2–3 subheadings (H3) under relevant sections.\n"
                     "• Short paragraphs (≤3 lines), clear sentences, and transition words (مثل «از طرفی»، «در نتیجه»، «به طور کلی»).\n"
-                    "• **Conclusion:** A concise wrap-up paragraph.\n\n"
+                    "• **Conclusion:** A concise wrap-up paragraph.\n"
+                    "• Use HTML formatting as described in the previous guidelines where appropriate (bold, italic, blockquotes, lists, tables, and highlights).\n\n"
                     "### SEO Guidelines:\n"
                     "- Include the primary keyword naturally in the title, first paragraph, meta description, and several times in the text.\n"
                     "- Maintain a natural flow — avoid keyword stuffing.\n"
