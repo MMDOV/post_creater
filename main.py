@@ -47,19 +47,23 @@ async def main() -> None:
     site_url: str = os.getenv("SITE_URL", "")
     google_api: str = os.getenv("GOOGLE_API", "")
     google_cse: str = os.getenv("GOOGLE_CSE", "")
-    if not api_key or not wp_api_user or not wp_api_pass or not site_url:
+    keyphrase: str = os.getenv("KEYPHRASE", "")
+    if (
+        not api_key
+        or not wp_api_user
+        or not wp_api_pass
+        or not site_url
+        or not keyphrase
+    ):
         logging.error(
-            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE",
+            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE, KEYPHRASE",
             exc_info=True,
         )
         raise RuntimeError(
-            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE"
+            "Missing one or more required environment variables: API_KEY, USERNAME, PASSWORD, SITE_URL, GOOGLE_API, GOOGLE_CSE, KEYPHRASE"
         )
 
     try:
-        keyphrase = "آنفولانزا"
-        # keyphrase = str(input("Enter your keyword: "))
-
         wordpress = WordPress(
             username=wp_api_user, password=wp_api_pass, site_url=site_url
         )
