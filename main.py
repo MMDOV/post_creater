@@ -74,6 +74,12 @@ async def main() -> None:
         all_categories = await wordpress.get_categories()
         print(f"all categories:{all_categories}")
 
+        related_articles = []
+        if related_article_ids:
+            for id in related_article_ids:
+                related_article = await wordpress.get_post_info(post_id=id)
+                related_articles.append(related_article)
+
         scraper = Scrape(
             google_api_key=google_api,
             google_cse_id=google_cse,
@@ -85,11 +91,6 @@ async def main() -> None:
         if not os.path.exists(json_file) or not os.path.exists(html_file):
             print("files not found")
             top_results_info = await scraper.get_top_results_info(query=keyphrase)
-            related_articles = []
-            if related_article_ids:
-                for id in related_article_ids:
-                    related_article = await wordpress.get_post_info(post_id=id)
-                    related_articles.append(related_article)
 
             client = OpenAi(
                 openai_api_key=api_key,
@@ -130,6 +131,7 @@ async def main() -> None:
             keyword=keyphrase,
             categories=list(all_categories.values()),
             tags=list(all_tags.values()),
+            related_articles=related_articles,
             conversation_id=conversation_id,
             html_output=html_output,
             json_output=json_output,
