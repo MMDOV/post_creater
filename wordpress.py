@@ -30,7 +30,6 @@ class WordPressClient:
         else:
             raise ValueError("Must provide post_id or post_slug")
 
-        print(url)
         auth = (
             aiohttp.BasicAuth(self.username, self.password)
             if self.username and self.password
