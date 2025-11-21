@@ -15,6 +15,7 @@ class Yoast:
         meta: str,
         slug: str,
         text: str,
+        permalink: str,
         locale: str = "fa",
     ):
         self._analysis = []
@@ -26,6 +27,7 @@ class Yoast:
             "slug": slug,
             "text": text,
             "locale": locale,
+            "permalink": permalink,
         }
         proc = subprocess.run(
             ["node", "yoast_seo.js"],

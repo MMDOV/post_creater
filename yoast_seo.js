@@ -71,6 +71,7 @@ async function main() {
     description: body.metaDescription || "",
     slug: body.slug || "",
     locale: body.locale || "en",
+    permalink: body.permalink || "",
   });
 
   // Run assessments

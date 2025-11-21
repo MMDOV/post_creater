@@ -79,6 +79,7 @@ async def main() -> None:
             for id in related_article_ids:
                 related_article = await wordpress.get_post_info(post_id=id)
                 related_articles.append(related_article)
+        print(related_articles)
 
         scraper = Scrape(
             google_api_key=google_api,
@@ -142,7 +143,6 @@ async def main() -> None:
                 "images",
                 "imageKeyphrase",
                 "slugKeyword",
-                "internalLinks",
             ]
         )
         analyzer.analyze(
@@ -151,6 +151,7 @@ async def main() -> None:
             meta=meta,
             slug=slug,
             text=html_output,
+            permalink=site_url,
             locale="fa",
         )
         analysys = analyzer.get_analysis()
@@ -162,6 +163,7 @@ async def main() -> None:
                 meta=meta,
                 slug=slug,
                 text=html_output,
+                permalink=site_url,
                 locale="fa",
             )
             analysys = analyzer.get_analysis()
