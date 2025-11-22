@@ -1,12 +1,15 @@
 import subprocess
 import re
 import json
+from typing import Any, Pattern
+
+TAG_PATTERN: Pattern = re.compile(r"<(h[1-6]|p|li)>(.*?)</\1>", re.DOTALL)
 
 
 class Yoast:
-    def __init__(self, filters):
-        self.filters = filters
-        self._analysis = []
+    def __init__(self, filters: list[str]) -> None:
+        self.filters: list[str] = filters
+        self._analysis: list[dict[str, Any]] = []
 
     def analyze(
         self,
@@ -17,10 +20,10 @@ class Yoast:
         text: str,
         permalink: str,
         locale: str = "fa",
-    ):
+    ) -> None | str:
         self._analysis = []
-        self.text = text
-        input_data = {
+        self.text: str = text
+        input_data: dict[str, str] = {
             "keyword": keyword,
             "title": title,
             "metaDescription": meta,
@@ -39,7 +42,7 @@ class Yoast:
         if proc.returncode != 0:
             return proc.stderr.decode()
         else:
-            output = json.loads(proc.stdout.decode())
+            output: dict[str, Any] = json.loads(proc.stdout.decode())
             for key, value in output.items():
                 if key != "inclusiveLanguage":
                     for seo in value:
@@ -58,79 +61,66 @@ class Yoast:
             "rating",
             "problemSentences",
         ],
-    ):
-        result = []
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
         for item in self._analysis:
-            marks = item.get("marks", [])
+            marks: list = item.get("marks", [])
 
-            # Extract normal problem sentences
             item["problemSentences"] = extract_problem_sentences(self.text, marks)
 
-            # Special case: subheadingsKeyword
             if item.get("_identifier") == "subheadingsKeyword":
-                # Find all H2 and H3 tags in the HTML
-                headings = re.findall(
+                headings: list[str] = re.findall(
                     r"<h[23][^>]*>.*?</h[23]>", self.text, flags=re.DOTALL
                 )
-                subheading_problems = []
-                for h in headings:
-                    # Extract first word without HTML
-                    text_only = re.sub(r"<[^>]+>", "", h).strip()
-                    first_word = text_only.split()[0] if text_only else ""
+                subheading_problems: list[dict[str, str]] = []
+                for heading in headings:
+                    text_only: str = re.sub(r"<[^>]+>", "", heading).strip()
+                    first_word: str = text_only.split()[0] if text_only else ""
                     subheading_problems.append(
-                        {"fullSentence": h, "firstWord": first_word}
+                        {"fullSentence": heading, "firstWord": first_word}
                     )
 
-                # Replace problemSentences with these headings
                 item["problemSentences"] = subheading_problems
 
-            entry = {key: item.get(key) for key in keys}
+            entry: dict[str, Any] = {key: item.get(key) for key in keys}
             result.append(entry)
 
         return result
 
 
-TAG_PATTERN = re.compile(r"<(h[1-6]|p|li)>(.*?)</\1>", re.DOTALL)
-
-
 def normalize_first_word(text: str) -> str:
-    text = text.strip()
-    if not text:
+    stripped_text: str = re.sub(r"^[\(\[\"\'«»،؛\-\–\—\u200c]+", "", text.strip())
+    if not stripped_text:
         return ""
-    text = re.sub(r"^[\(\[\"\'«»،؛\-\–\—\u200c]+", "", text)
-    first = text.split()[0] if text.split() else ""
-    first = re.sub(r"[\.،,:;!؟\?]+$", "", first)
-    return first
+    return re.sub(
+        r"[\.،,:;!؟\?]+$", "", stripped_text.split()[0] if stripped_text.split() else ""
+    )
 
 
-def extract_problem_sentences(text: str, marks: list[dict]):
-    # Split based on block-level HTML tags rather than punctuation
-    # This keeps the tags in the sentence
-    blocks = re.split(r"(?=<[^>]+>)", text)
+def extract_problem_sentences(text: str, marks: list[dict]) -> list[dict[str, str]]:
+    blocks: list[str] = re.split(r"(?=<[^>]+>)", text)
 
-    problem_list = []
+    problem_list: list[dict[str, str]] = []
 
     for mark in marks:
-        start = mark.get("_properties", {}).get("position", {}).get("startOffset")
-        end = mark.get("_properties", {}).get("position", {}).get("endOffset")
+        start: int = mark.get("_properties", {}).get("position", {}).get("startOffset")
+        end: int = mark.get("_properties", {}).get("position", {}).get("endOffset")
         if start is None or end is None:
             continue
 
-        # Find which block overlaps the Yoast mark range
         char_pos = 0
         for block in blocks:
-            block_end = char_pos + len(block)
+            block_end: int = char_pos + len(block)
             if char_pos <= start <= block_end or char_pos <= end <= block_end + 1:
-                cleaned = block.strip()
+                cleaned: str = block.strip()
                 if cleaned:
-                    # extract first word (preserve HTML)
-                    text_only = re.sub(r"<[^>]+>", "", cleaned).strip()
-                    first_word = text_only.split()[0] if text_only else ""
+                    text_only: str = re.sub(r"<[^>]+>", "", cleaned).strip()
+                    first_word: str = text_only.split()[0] if text_only else ""
                     problem_list.append(
                         {"fullSentence": cleaned, "firstWord": first_word}
                     )
                 break
 
-            char_pos = block_end
+            char_pos: int = block_end
 
     return problem_list
