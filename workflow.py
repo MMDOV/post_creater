@@ -13,7 +13,7 @@ async def optimize_until_valid(
     post_data: PostData,
     site_data: SiteInfo,
     maximum_iterations: int = 100,
-    maximum_problems: int = 1,
+    maximum_problems: int = 0,
 ):
     iteration = 0
     html_file = f"{post_data.keyphrase}.html"
@@ -30,6 +30,8 @@ async def optimize_until_valid(
         )
         analysis = analyzer.get_analysis()
         # optional: print/debug
+        print(json.dumps(analysis, indent=2, ensure_ascii=False))
+        print(len(analysis))
         user_input = input("Would you like to improve? (y/n)").lower()
         if user_input != "y":
             break
