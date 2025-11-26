@@ -86,6 +86,7 @@ class OpenAi:
                     '  "faqs": [{"question": "...", "answer": "..."}, ... 3 total],\n'
                     '  "meta": "≤160 characters meta description (must include the primary keyword)",\n'
                     '  "sources": [{"title": "...", "link": "..."}, ...]\n'
+                    '  "synonyms": [list of relevant synonyms]\n'
                     "}\n"
                     "Do not output anything outside this format."
                 ),
@@ -155,6 +156,30 @@ class OpenAi:
                     "- Select only from these lists when filling the JSON.\n"
                     "- Do NOT create new category or tag names.\n"
                     "- Pick those most relevant to your article’s focus.\n"
+                    "Acknowledge only."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Rules for synonyms:\n"
+                    "- Generate 3–5 concise, natural synonyms or alternative phrases for the primary keyword.\n"
+                    "- Each synonym should be 1–3 words, reader-friendly, and suitable for Yoast SEO input.\n"
+                    "- Synonyms must be in Persian (the same language as the primary keyword).\n"
+                    "- Do not repeat the primary keyword itself.\n"
+                    "- Ensure relevance and contextual accuracy.\n"
+                    "Acknowledge only."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Instructions for using synonyms in the article:\n"
+                    "- Treat the generated synonyms as secondary keyphrases.\n"
+                    "- Naturally incorporate them into headings, subheadings, and body text.\n"
+                    "- Ensure they appear multiple times but avoid overstuffing.\n"
+                    "- Maintain natural Persian phrasing — do not force synonyms unnaturally.\n"
+                    "- Continue using the primary keyword as usual alongside the synonyms.\n"
                     "Acknowledge only."
                 ),
             },
@@ -250,11 +275,11 @@ class OpenAi:
                     "- Attempt only **one adjustment cycle per issue** per pass.\n\n"
                     "### Actionable fixes for common Yoast issues:\n"
                     "- **Consecutive sentence beginnings:** Rephrase only the 2nd and 3rd sentences in sequences of 3+ using slight restructuring. Fully rewrite only if needed.\n"
-                    "- **Keyword density:** Adjust only body text, not subheadings. Add or remove minimal occurrences of the primary keyword to reach 0.5–3%. Avoid overcorrection.\n"
+                    "- **Keyword density:** Adjust only body text, not subheadings. Add or remove minimal occurrences of the primary keyword **or any of its synonyms** (from the 'synonyms' list in the JSON) to reach 0.5–3%. Avoid overcorrection.\n"
                     "- **SubheadingsKeyword:** For each <h2>/<h3> heading listed in 'problemSentences':\n"
-                    "  • Check if the primary keyword is present exactly.\n"
-                    "  • If missing, insert it somewhere natural in the heading. Do not skip any flagged heading.\n"
-                    "  • If the heading contains too many occurrences, remove extras.\n"
+                    "  • Check if the primary keyword or any of its synonyms are present.\n"
+                    "  • If missing, **first try to insert a synonym naturally** in the heading. Only use the primary keyword if no suitable synonym fits.\n"
+                    "  • If the heading contains too many occurrences of the keyword or synonyms, remove extras.\n"
                     "  • Apply minimal edits but **ensure that after editing Yoast would no longer mark it as a problem**.\n"
                     "- **Meta description:** Only adjust if Yoast flagged it as too short or too long. If flagged, adjust to 120–156 characters including the primary keyword naturally. Do not modify otherwise.\n"
                     "- **Sentence length:** Split sentences >20 words while keeping meaning.\n"
@@ -267,7 +292,8 @@ class OpenAi:
                     "- Adjust body text first for density before touching subheadings.\n\n"
                     "### Context:\n"
                     f"Title: {title}\n"
-                    f"Primary Keyword/Keyphrase: {self.keyword}\n\n"
+                    f"Primary Keyword/Keyphrase: {self.keyword}\n"
+                    f"Synonyms: {self.json_output.get('synonyms', [])}\n\n"
                     f"Yoast analysis feedback:\n{yoast_info}\n\n"
                     "Full article HTML:\n"
                     f"{self.html_output}\n\n"
@@ -284,11 +310,12 @@ class OpenAi:
                     '   - "tags": [list of 5 relevant tags]\n'
                     '   - "faqs": [3 objects {"question","answer"}]\n'
                     '   - "meta": meta description (≤160 chars, must include the Primary Keyword, only edit if flagged by Yoast)\n'
-                    '   - "sources": list of objects with "title" and "link" for every source referenced\n\n'
+                    '   - "sources": list of objects with "title" and "link" for every source referenced\n'
+                    '   - "synonyms": [list of relevant synonyms]\n\n'
                     "### Self-check:\n"
                     "- Verify each Yoast issue is actually resolved.\n"
                     "- Consecutive sentence beginnings ≤2 per sequence.\n"
-                    "- Keyword density 0.5–3%, subheadingsKeyword fixed as per problemSentences.\n"
+                    "- Keyword density 0.5–3%, using primary keyword and/or synonyms; subheadingsKeyword fixed as per problemSentences.\n"
                     "- Meta description only changed if flagged, otherwise unchanged.\n"
                     "- Sentence lengths, transition words, passive voice, paragraph lengths within thresholds.\n"
                     "- Only return final HTML and JSON when all adjustments are within range.\n\n"
@@ -365,6 +392,7 @@ class OpenAi:
             "faqs": [{"question": "", "answer": ""}],
             "meta": "",
             "sources": [{"title": "", "link": ""}],
+            "synonyms": [],
         }
         for key, value in required_structure.items():
             if key not in json_output:
@@ -387,6 +415,7 @@ def validate_post_json(data: dict):
         "faqs": list,
         "meta": str,
         "sources": list,
+        "synonyms": list,
     }
 
     # check top-level keys and types

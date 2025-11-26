@@ -21,6 +21,7 @@ async def optimize_until_valid(
     while True:
         analyzer.analyze(
             keyword=post_data.keyphrase,
+            synonyms=", ".join(post_data.json.synonyms),
             title=post_data.json.post_title,
             meta=post_data.json.meta,
             slug=post_data.json.slug,
@@ -29,6 +30,8 @@ async def optimize_until_valid(
             locale="fa",
         )
         analysis = analyzer.get_analysis()
+        if len(analysis) <= maximum_problems or iteration >= maximum_iterations:
+            break
         # optional: print/debug
         print(json.dumps(analysis, indent=2, ensure_ascii=False))
         print(len(analysis))
@@ -46,8 +49,6 @@ async def optimize_until_valid(
         )
         await save_to_file(html_file, html_output)
         iteration += 1
-        if len(analysis) <= maximum_problems or iteration >= maximum_iterations:
-            break
 
 
 async def generate_post_if_missing(

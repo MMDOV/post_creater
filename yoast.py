@@ -14,6 +14,7 @@ class Yoast:
     def analyze(
         self,
         keyword: str,
+        synonyms: str,
         title: str,
         meta: str,
         slug: str,
@@ -23,8 +24,9 @@ class Yoast:
     ) -> None | str:
         self._analysis = []
         self.text: str = text
-        input_data: dict[str, str] = {
+        input_data: dict[str, Any] = {
             "keyword": keyword,
+            "synonyms": synonyms,
             "title": title,
             "metaDescription": meta,
             "slug": slug,

@@ -65,6 +65,7 @@ async function main() {
 
   const paper = new Paper(body.text || "", {
     keyword: body.keyword || "",
+    synonyms: body.synonyms || "",
     title: body.title || "",
     textTitle: body.title || "",
     titleWidth: measureTextWidth(body.title) || 0,

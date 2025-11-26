@@ -1,10 +1,10 @@
 import aiohttp
-import sys
+import json
 from html import unescape
 from bs4 import BeautifulSoup
 from typing import Any
 from urllib.parse import urlparse
-import json
+from models import PostData
 
 
 class WordPressClient:
@@ -171,15 +171,7 @@ class WordPressClient:
 
     def _build_post_payload(
         self,
-        keyword: str,
-        title: str,
-        content: str,
-        slug: str,
-        meta: str,
-        faqs: list[dict],
-        article_sources: list[dict] = [],
-        categories: list = [],
-        tags: list = [],
+        post_data: PostData,
         status: str = "draft",
     ) -> dict[str, Any]:
         """Return a dict ready for either create_post or yoast-preview render."""
@@ -190,9 +182,9 @@ class WordPressClient:
                     "faq_question": str(faq.get("question")),
                     "faq_answer": str(faq.get("answer")),
                 }
-                for i, faq in enumerate(faqs)
+                for i, faq in enumerate(post_data.json.faqs)
             }
-            if faqs
+            if post_data.json.faqs
             else {}
         )
 
@@ -201,27 +193,29 @@ class WordPressClient:
                 "<ul>"
                 + "".join(
                     f'<li><a href="{src["link"]}">{src["title"]}</a></li>'
-                    for src in article_sources
+                    for src in post_data.json.sources
                 )
                 + "</ul>"
             )
-            if article_sources
+            if post_data.json.sources
             else ""
         )
 
+        print("synonyms: ", post_data.json.synonyms)
         payload: dict[str, Any] = {
-            "title": title,
-            "content": content,
-            "slug": slug,
+            "title": post_data.json.post_title,
+            "content": post_data.html,
+            "slug": post_data.json.slug,
             "meta": {
                 "faq_items_v2": faq_items,
                 "article_sources": sources,
             },
-            "categories": categories,
-            "tags": tags,
-            "yoast_description": meta,
-            "yoast_keyword": keyword,
-            "yoast_title": title,
+            "categories": post_data.json.picked_category_ids,
+            "tags": post_data.json.picked_tag_ids,
+            "yoast_description": post_data.json.meta,
+            "yoast_keyword": post_data.keyphrase,
+            "yoast_title": post_data.json.post_title,
+            "yoast_synonyms": post_data.json.synonyms,
         }
         if status is not None:
             payload["status"] = status
@@ -229,34 +223,18 @@ class WordPressClient:
 
     async def create_post(
         self,
-        keyword: str,
-        title: str,
-        content: str,
-        slug: str,
-        meta: str,
-        faqs: list[dict],
-        article_sources: list[dict] = [],
-        categories: list = [],
-        tags: list = [],
+        post_data: PostData,
         status: str = "draft",
     ) -> int:
-        post_data: dict[str, Any] = self._build_post_payload(
-            keyword,
-            title,
-            content,
-            slug,
-            meta,
-            faqs,
-            article_sources,
-            categories,
-            tags,
+        post: dict[str, Any] = self._build_post_payload(
+            post_data,
             status,
         )
         url: str = f"{self.site_url}wp-json/wp/v2/posts"
         async with aiohttp.ClientSession(
             auth=aiohttp.BasicAuth(self.username, self.password)
         ) as session:
-            async with session.post(url, json=post_data) as resp:
+            async with session.post(url, json=post) as resp:
                 if resp.status != 201:
                     raise Exception(
                         f"Failed to create post: {resp.status}, {await resp.text()}"

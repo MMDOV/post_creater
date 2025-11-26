@@ -21,6 +21,7 @@ class PostJsonData:
     post_title: str = ""
     meta: str = ""
     slug: str = ""
+    synonyms: List[str] = field(default_factory=list)
     conversation_id: str = ""
 
     @classmethod
@@ -40,6 +41,7 @@ class PostJsonData:
             post_title=json["title"],
             meta=json["meta"],
             slug=json["slug"],
+            synonyms=json["synonyms"],
             sources=json["sources"],
             conversation_id=json["conversation_id"],
         )

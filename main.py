@@ -75,15 +75,7 @@ async def main() -> None:
     )
     await optimize_until_valid(client, analyzer, post_info, site_info)
     await wordpress.create_post(
-        keyword=post_info.keyphrase,
-        title=post_info.json.post_title,
-        content=post_info.html,
-        slug=post_info.json.slug,
-        faqs=post_info.json.faqs,
-        meta=post_info.json.meta,
-        article_sources=post_info.json.sources,
-        categories=post_info.json.picked_category_ids,
-        tags=post_info.json.picked_tag_ids,
+        post_data=post_info,
     )
 
 
